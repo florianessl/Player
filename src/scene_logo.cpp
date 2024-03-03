@@ -30,6 +30,7 @@
 #include "output.h"
 #include "generated/logo.h"
 #include "generated/logo2.h"
+#include "lcf/rpg/saveeasyrpgwindow.h"
 #include "utils.h"
 #include "rand.h"
 #include "text.h"
