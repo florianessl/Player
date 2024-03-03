@@ -376,6 +376,10 @@ void Scene::PushTitleScene(bool pop_stack_top) {
 	if (!Player::startup_language.empty()) {
 		Player::translation.SelectLanguage(Player::startup_language);
 	} else if (Player::translation.HasTranslations()) {
+		std::string lang = Player::translation.GetLatestSavegameLanguage();
+		if (lang != "default") {
+			Player::translation.SelectLanguage(lang);
+		}
 		if (Player::player_config.lang_select_on_start.Get() == ConfigEnum::StartupLangSelect::Always
 			|| (!FileFinder::HasSavegame() && Player::player_config.lang_select_on_start.Get() == ConfigEnum::StartupLangSelect::FirstStartup)) {
 			Scene::Push(std::make_shared<Scene_Language>(), pop_stack_top);
