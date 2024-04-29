@@ -288,6 +288,11 @@ namespace Player {
 	bool IsPatchManiac();
 
 	/**
+	* FIXME: This is just a STUB implementation (IsPatchEasyRpg is a planned feature that is not part of the main branch yet)
+	*/
+	bool IsPatchEasyRpg();
+
+	/**
 	 * @return True when Ineluki Key Patch is active
 	 */
 	bool IsPatchKeyPatch();
@@ -474,6 +479,10 @@ inline bool Player::IsPatchDynRpg() {
 
 inline bool Player::IsPatchManiac() {
 	return game_config.patch_maniac.Get();
+}
+
+inline bool Player::IsPatchEasyRpg() {
+	return true;
 }
 
 inline bool Player::IsPatchKeyPatch() {
