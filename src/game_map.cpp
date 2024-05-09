@@ -90,6 +90,8 @@ namespace {
 
 	bool translation_changed = false;
 
+	MapInitContext map_init_immediate, map_init_deferred;
+
 	// Used when the current map is not in the maptree
 	const lcf::rpg::MapInfo empty_map_info;
 }
@@ -217,6 +219,13 @@ void Game_Map::Setup(std::unique_ptr<lcf::rpg::Map> map_in) {
 	// Update the save counts so that if the player saves the game
 	// events will properly resume upon loading.
 	Main_Data::game_player->UpdateSaveCounts(lcf::Data::system.save_count, GetMapSaveCount());
+
+	if (!Player::HasEasyRpgExtensions()) {
+		map_init_immediate.finished_ce = true;
+		map_init_immediate.finished_ev = true;
+		map_init_deferred.finished_ce = true;
+		map_init_deferred.finished_ev = true;
+	}
 }
 
 void Game_Map::SetupFromSave(
@@ -358,6 +367,11 @@ void Game_Map::SetupCommon() {
 	if (translation_changed) {
 		InitCommonEvents();
 	}
+
+	map_init_immediate.finished_ce = false;
+	map_init_immediate.finished_ev = false;
+	map_init_deferred.finished_ce = false;
+	map_init_deferred.finished_ev = false;
 
 	// Create the map events
 	events.reserve(map->events.size());
@@ -1207,18 +1221,77 @@ bool Game_Map::UpdateMessage(MapUpdateAsyncContext& actx) {
 	return true;
 }
 
+void Game_Map::ResetMap() {
+	Setup(std::move(map));
+}
+
+void Game_Map::ResetMapInitState() {
+	map_init_immediate.finished_ce = false;
+	map_init_immediate.finished_ev = false;
+	map_init_deferred.finished_ce = false;
+	map_init_deferred.finished_ev = false;
+
+	for (auto& ev : events) {
+		auto trigger = ev.GetTrigger();
+		if (trigger == lcf::rpg::EventPage::Trigger_map_init_immediate || trigger == lcf::rpg::EventPage::Trigger_map_init_deferred) {
+			ev.ResetMapInitState();
+		}
+	}
+	for (auto& ce : common_events) {
+		auto trigger = ce.GetTrigger();
+		if (trigger == lcf::rpg::CommonEvent::Trigger_map_init_immediate || trigger == lcf::rpg::CommonEvent::Trigger_map_init_deferred) {
+			ce.ResetMapInitState();
+		}
+	}
+}
+
+inline void Game_Map::TriggerMapInitEvents(MapInitContext& state, bool is_immediate) {
+	auto& interp = GetInterpreter();
+
+	if (!state.finished_ce) {
+		state.finished_ce = true;
+
+		int map_id = GetMapId();
+		for (auto& ce : common_events) {
+			if (ce.IsWaitingMapInitExecution(map_id, is_immediate)) {
+				ce.ClearWaitingMapInitExecution(map_id);
+				interp.Push(&ce, is_immediate);
+				state.finished_ce = false;
+				break;
+			}
+		}
+	}
+
+	if (state.finished_ce && !state.finished_ev) {
+		state.finished_ev = true;
+
+		for (auto& ev : events) {
+			if (ev.IsWaitingMapInitExecution(is_immediate)) {
+				ev.ClearWaitingMapInitExecution();
+				interp.Push(&ev, is_immediate);
+				state.finished_ev = false;
+				break;
+			}
+		}
+	}
+}
+
 bool Game_Map::UpdateForegroundEvents(MapUpdateAsyncContext& actx) {
 	auto& interp = GetInterpreter();
 
-	// If we resume from async op, we don't clear the loop index.
-	const bool resume_fg = actx.IsForegroundEvent();
+	TriggerMapInitEvents(map_init_immediate, true);
 
-	// Run any event loaded from last frame.
-	interp.Update(!resume_fg);
-	if (interp.IsAsyncPending()) {
-		// Suspend due to this event ..
-		actx = MapUpdateAsyncContext::FromForegroundEvent(interp.GetAsyncOp());
-		return false;
+	if (map_init_immediate.IsFinished()) {
+		// If we resume from async op, we don't clear the loop index.
+		const bool resume_fg = actx.IsForegroundEvent();
+
+		// Run any event loaded from last frame.
+		interp.Update(!resume_fg);
+		if (interp.IsAsyncPending()) {
+			// Suspend due to this event ..
+			actx = MapUpdateAsyncContext::FromForegroundEvent(interp.GetAsyncOp());
+			return false;
+		}
 	}
 
 	while (!interp.IsRunning() && !interp.ReachedLoopLimit()) {
@@ -1230,6 +1303,18 @@ bool Game_Map::UpdateForegroundEvents(MapUpdateAsyncContext& actx) {
 		if (Scene::instance->HasRequestedScene() && interp.GetLoopCount() > 0) {
 			break;
 		}
+		if (!map_init_deferred.IsFinished()) {
+			TriggerMapInitEvents(map_init_deferred, false);
+			if (interp.IsRunning()) {
+				interp.Update(false);
+				if (interp.IsAsyncPending()) {
+					// Suspend due to this event ..
+					actx = MapUpdateAsyncContext::FromForegroundEvent(interp.GetAsyncOp());
+					return false;
+				}
+			}
+		}
+
 		Game_CommonEvent* run_ce = nullptr;
 
 		for (auto& ce: common_events) {

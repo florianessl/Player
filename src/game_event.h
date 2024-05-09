@@ -80,6 +80,12 @@ public:
 	/** @return waiting_execution flag.  */
 	bool IsWaitingForegroundExecution() const;
 
+	bool IsWaitingMapInitExecution(bool immediate) const;
+
+	void ResetMapInitState();
+	void ClearWaitingMapInitExecution();
+
+
 	/**
 	 * If the event is starting, whether or not it was started
 	 * by pushing the decision key.
@@ -167,6 +173,7 @@ private:
 	bool CheckEventAutostart();
 	bool CheckEventCollision();
 	void SetMaxStopCountForRandom();
+	bool CheckEventMapInitStart();
 
 	/**
 	 * Moves on a random route.

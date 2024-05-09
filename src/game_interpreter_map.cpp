@@ -144,6 +144,8 @@ bool Game_Interpreter_Map::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CommandToggleAtbMode(com);
 		case static_cast <Game_Interpreter::Cmd>(2002): // Cmd::EasyRpg_TriggerEventAt
 			return CommandEasyRpgTriggerEventAt(com);
+		case Cmd::EasyRpgResetMapState:
+			return CommandEasyRpgResetMapState(com);
 		default:
 			return Game_Interpreter::ExecuteCommand(com);
 	}
@@ -155,6 +157,9 @@ bool Game_Interpreter_Map::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 bool Game_Interpreter_Map::CommandRecallToLocation(lcf::rpg::EventCommand const& com) { // Code 10830
 	if (Game_Message::IsMessageActive()) {
 		return false;
+	}
+	if (!ValidateTeleportAllowed()) {
+		return true;
 	}
 
 	auto& frame = GetFrame();
@@ -183,7 +188,7 @@ bool Game_Interpreter_Map::CommandEnemyEncounter(lcf::rpg::EventCommand const& c
 	auto& frame = GetFrame();
 	auto& index = frame.current_command;
 
-	if (Game_Message::IsMessageActive()) {
+	if (Game_Message::IsMessageActive() || frame.easyrpg_triggered_by_map_init) {
 		return false;
 	}
 
@@ -363,6 +368,9 @@ bool Game_Interpreter_Map::CommandShowInn(lcf::rpg::EventCommand const& com) { /
 	if (main_flag && !Game_Message::CanShowMessage(main_flag)) {
 		return false;
 	}
+	if (!ValidateMessageAllowed()) {
+		return true;
+	}
 
 	PendingMessage pm(Game_Message::CommandCodeInserter);
 
@@ -477,6 +485,9 @@ bool Game_Interpreter_Map::CommandTeleport(lcf::rpg::EventCommand const& com) { 
 																		   // TODO: if in battle return true
 	if (Game_Message::IsMessageActive()) {
 		return false;
+	}
+	if (!ValidateTeleportAllowed()) {
+		return true;
 	}
 
 	auto& frame = GetFrame();
@@ -629,7 +640,7 @@ bool Game_Interpreter_Map::CommandOpenSaveMenu(lcf::rpg::EventCommand const& /* 
 	auto& frame = GetFrame();
 	auto& index = frame.current_command;
 
-	if (Game_Message::IsMessageActive()) {
+	if (Game_Message::IsMessageActive() || frame.easyrpg_triggered_by_map_init) {
 		return false;
 	}
 
@@ -642,7 +653,7 @@ bool Game_Interpreter_Map::CommandOpenMainMenu(lcf::rpg::EventCommand const& /* 
 	auto& frame = GetFrame();
 	auto& index = frame.current_command;
 
-	if (Game_Message::IsMessageActive()) {
+	if (Game_Message::IsMessageActive() || frame.easyrpg_triggered_by_map_init) {
 		return false;
 	}
 
@@ -659,7 +670,7 @@ bool Game_Interpreter_Map::CommandOpenLoadMenu(lcf::rpg::EventCommand const& /* 
 	auto& frame = GetFrame();
 	auto& index = frame.current_command;
 
-	if (Game_Message::IsMessageActive()) {
+	if (Game_Message::IsMessageActive() || frame.easyrpg_triggered_by_map_init) {
 		return false;
 	}
 
@@ -682,6 +693,26 @@ bool Game_Interpreter_Map::CommandEasyRpgTriggerEventAt(lcf::rpg::EventCommand c
 	int y = ValueOrVariable(com.parameters[2], com.parameters[3]);
 
 	Main_Data::game_player->TriggerEventAt(x, y);
+
+	return true;
+}
+
+bool Game_Interpreter_Map::CommandEasyRpgResetMapState(lcf::rpg::EventCommand const& com) { // 2026
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	if (com.parameters[0]) {
+		Game_Map::ResetMapInitState();
+	}
+	if (com.parameters[1]) {
+		//TODO: Reset ScopedVars with flag 'auto_reset' ! (part of entirely different branch right now)
+	}
+	if (com.parameters[2]) {
+		Game_Map::ResetMap();
+	}
+
+	Game_Map::SetNeedRefresh(true);
 
 	return true;
 }

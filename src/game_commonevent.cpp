@@ -47,6 +47,9 @@ void Game_CommonEvent::SetSaveData(const lcf::rpg::SaveEventExecState& data) {
 		}
 		interpreter->SetState(data);
 	}
+	if (Player::HasEasyRpgExtensions()) {
+		map_init_last_id = data.easyrpg_map_init_last_id;
+	}
 }
 
 AsyncOp Game_CommonEvent::Update(bool resume_async) {
@@ -94,9 +97,12 @@ lcf::rpg::SaveEventExecState Game_CommonEvent::GetSaveData() {
 	if (interpreter) {
 		state = interpreter->GetState();
 	}
-	if (GetTrigger() == lcf::rpg::EventPage::Trigger_parallel && state.stack.empty()) {
+	auto* ce = lcf::ReaderUtil::GetElement(lcf::Data::commonevents, common_event_id);
+	if (ce->trigger == lcf::rpg::CommonEvent::Trigger_parallel && state.stack.empty()) {
 		// RPG_RT always stores an empty stack frame for parallel events.
 		state.stack.push_back({});
+	} else if (Player::HasEasyRpgExtensions() && (ce->trigger == lcf::rpg::CommonEvent::Trigger_map_init_immediate || ce->trigger == lcf::rpg::CommonEvent::Trigger_map_init_deferred)) {
+		state.easyrpg_map_init_last_id = map_init_last_id;
 	}
 	return state;
 }
@@ -112,4 +118,22 @@ bool Game_CommonEvent::IsWaitingBackgroundExecution(bool force_run) const {
 	auto* ce = lcf::ReaderUtil::GetElement(lcf::Data::commonevents, common_event_id);
 	return ce->trigger == lcf::rpg::EventPage::Trigger_parallel &&
 		(force_run || !ce->switch_flag || Main_Data::game_switches->Get(ce->switch_id));
+}
+
+bool Game_CommonEvent::IsWaitingMapInitExecution(int map_id, bool immediate) const {
+	if (map_id == map_init_last_id) {
+		return false;
+	}
+	auto* ce = lcf::ReaderUtil::GetElement(lcf::Data::commonevents, common_event_id);
+	return ce->trigger == (immediate ? lcf::rpg::CommonEvent::Trigger_map_init_immediate : lcf::rpg::CommonEvent::Trigger_map_init_deferred)
+		&& (!ce->switch_flag || Main_Data::game_switches->Get(ce->switch_id))
+		&& !ce->event_commands.empty();
+}
+
+void Game_CommonEvent::ResetMapInitState() {
+	map_init_last_id = 0;
+}
+
+void Game_CommonEvent::ClearWaitingMapInitExecution(int map_id) {
+	map_init_last_id = map_id;
 }

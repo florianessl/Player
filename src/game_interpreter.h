@@ -66,11 +66,12 @@ public:
 	void Push(
 			std::vector<lcf::rpg::EventCommand> _list,
 			int _event_id,
-			bool started_by_decision_key = false
+			bool started_by_decision_key = false,
+			bool triggered_by_map_init = false
 	);
-	void Push(Game_Event* ev);
+	void Push(Game_Event* ev, bool triggered_by_map_init = false);
 	void Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key);
-	void Push(Game_CommonEvent* ev);
+	void Push(Game_CommonEvent* ev, bool triggered_by_map_init = false);
 
 	void InputButton();
 	void SetupChoices(const std::vector<std::string>& choices, int indent, PendingMessage& pm);
@@ -300,6 +301,9 @@ protected:
 
 	void ForegroundTextPush(PendingMessage pm);
 	void EndEventProcessing();
+
+	virtual bool ValidateMessageAllowed();
+	virtual bool ValidateTeleportAllowed();
 
 	FileRequestBinding request_id;
 	enum class Keys {

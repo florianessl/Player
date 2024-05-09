@@ -513,7 +513,7 @@ void Scene_Debug::UpdateRangeListWindow() {
 				addItem(lcf::Data::terms.gold.c_str());
 				addItem("Items");
 				addItem("Battle", !is_battle);
-				addItem("Goto Map", !is_battle);
+				addItem("Goto Map", !is_battle /* && !easyrpg_triggered_by_map_init */);
 				addItem("Full Heal");
 				addItem("Level");
 			} else {
@@ -521,7 +521,7 @@ void Scene_Debug::UpdateRangeListWindow() {
 				addItem("Call ComEvent");
 				addItem("Call MapEvent", Scene::Find(Scene::Map) != nullptr);
 				addItem("Call BtlEvent", is_battle);
-				addItem("Open Menu", !is_battle);
+				addItem("Open Menu", !is_battle /* && !easyrpg_triggered_by_map_init */);
 			}
 			break;
 		case eSwitch:

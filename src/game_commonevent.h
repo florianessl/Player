@@ -107,8 +107,14 @@ public:
 	 */
 	bool IsWaitingBackgroundExecution(bool force_run) const;
 
+	bool IsWaitingMapInitExecution(int map_id, bool immediate) const;
+
+	void ResetMapInitState();
+	void ClearWaitingMapInitExecution(int map_id);
+
 private:
 	int common_event_id;
+	int map_init_last_id;
 
 	/** Interpreter for parallel common events. */
 	std::unique_ptr<Game_Interpreter_Map> interpreter;

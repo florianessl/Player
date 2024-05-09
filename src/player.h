@@ -288,9 +288,9 @@ namespace Player {
 	bool IsPatchManiac();
 
 	/**
-	* FIXME: This is just a STUB implementation (IsPatchEasyRpg is a planned feature that is not part of the main branch yet)
+	* FIXME: This is just a STUB implementation (HasEasyRpgExtensions is a planned feature that is not part of the main branch yet)
 	*/
-	bool IsPatchEasyRpg();
+	bool HasEasyRpgExtensions();
 
 	/**
 	 * @return True when Ineluki Key Patch is active
@@ -481,7 +481,7 @@ inline bool Player::IsPatchManiac() {
 	return game_config.patch_maniac.Get();
 }
 
-inline bool Player::IsPatchEasyRpg() {
+inline bool Player::HasEasyRpgExtensions() {
 	return true;
 }
 

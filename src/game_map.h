@@ -82,6 +82,15 @@ private:
 	std::vector<int> event_ids;
 };
 
+struct MapInitContext {
+	bool finished_ce = false;
+	bool finished_ev = false;
+
+	bool IsFinished() {
+		return finished_ce && finished_ev;
+	};
+};
+
 /**
  * Game_Map namespace
  */
@@ -695,6 +704,11 @@ namespace Game_Map {
 
 	void AddEventToSwitchCache(lcf::rpg::Event& ev, int switch_id);
 	void AddEventToVariableCache(lcf::rpg::Event& ev, int var_id);
+
+	void ResetMap();
+	void ResetMapInitState();
+
+	void TriggerMapInitEvents(MapInitContext& state, bool is_immediate);
 
 	namespace Parallax {
 		struct Params {

@@ -329,6 +329,18 @@ bool Game_Event::IsWaitingForegroundExecution() const {
 	return data()->waiting_execution;
 }
 
+bool Game_Event::IsWaitingMapInitExecution(bool immediate) const {
+	return !data()->easyrpg_map_init_executed && GetTrigger() == (immediate ? lcf::rpg::EventPage::Trigger_map_init_immediate : lcf::rpg::EventPage::Trigger_map_init_deferred);
+}
+
+void Game_Event::ResetMapInitState() {
+	data()->easyrpg_map_init_executed = false;
+}
+
+void Game_Event::ClearWaitingMapInitExecution() {
+	data()->easyrpg_map_init_executed = true;
+}
+
 bool Game_Event::WasStartedByDecisionKey() const {
 	return data()->triggered_by_decision_key;
 }
