@@ -42,7 +42,6 @@
 #include "game_message.h"
 #include "game_pictures.h"
 #include "game_screen.h"
-#include "game_interpreter_control_variables.h"
 #include "game_windows.h"
 #include "maniac_patch.h"
 #include "spriteset_map.h"
@@ -68,6 +67,8 @@
 #include "baseui.h"
 #include "algo.h"
 #include "rand.h"
+
+#include "game_interpreter_control_variables.cpp"
 
 using namespace Game_Interpreter_Shared;
 
@@ -835,6 +836,12 @@ bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CommandManiacControlStrings(com);
 		case Cmd::Maniac_CallCommand:
 			return CommandManiacCallCommand(com);
+		case static_cast<Cmd>(2020):
+			return CommandEasyRpgConditionalBranchEx(com);
+		case static_cast<Cmd>(2021):
+			return CommandEasyRpgControlSwitchesEx(com);
+		case static_cast<Cmd>(2022):
+			return CommandEasyRpgControlVariablesEx(com);
 		case static_cast<Game_Interpreter::Cmd>(2053): //Cmd::EasyRpg_SetInterpreterFlag
 			return CommandEasyRpgSetInterpreterFlag(com);
 		default:
@@ -1079,205 +1086,57 @@ bool Game_Interpreter::CommandControlSwitches(lcf::rpg::EventCommand const& com)
 		}
 
 		int val = com.parameters[3];
-
 		if (start == end) {
-			if (val < 2) {
-				Main_Data::game_switches->Set(start, val == 0);
-			} else {
-				Main_Data::game_switches->Flip(start);
-			}
+			ControlSwitches::PerformSwitchOp(val, start);
 			Game_Map::SetNeedRefreshForSwitchChange(start);
 		} else {
-			if (val < 2) {
-				Main_Data::game_switches->SetRange(start, end, val == 0);
-			} else {
-				Main_Data::game_switches->FlipRange(start, end);
-			}
+			ControlSwitches::PerformSwitchRangeOp(val, start, end);
 			Game_Map::SetNeedRefresh(true);
 		}
 	}
 	return true;
 }
 
-bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com) { // code 10220
-	int value = 0;
-	int operand = com.parameters[4];
-
-	if (EP_UNLIKELY(operand >= 9 && !Player::IsPatchManiac())) {
-		Output::Warning("ControlVariables: Unsupported operand {}", operand);
+bool Game_Interpreter::CommandEasyRpgControlSwitchesEx(lcf::rpg::EventCommand const& com) { // 2021
+	if (!Player::HasEasyRpgExtensions()) {
 		return true;
 	}
 
-	switch (operand) {
-		case 0:
-			// Constant
-			value = com.parameters[5];
-			break;
-		case 1:
-			// Var A ops B
-			value = Main_Data::game_variables->Get(com.parameters[5]);
-			break;
-		case 2:
-			// Number of var A ops B
-			value = Main_Data::game_variables->GetIndirect(com.parameters[5]);
-			break;
-		case 3: {
-			// Random between range
-			int32_t arg1 = com.parameters[5];
-			int32_t arg2 = com.parameters[6];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				arg1 = ValueOrVariableBitfield(com.parameters[7], 0, arg1);
-				arg2 = ValueOrVariableBitfield(com.parameters[7], 1, arg2);
-			}
+	int start, end;
 
-			value = ControlVariables::Random(arg1, arg2);
-			break;
-		}
-		case 4: {
-			// Items
-			int item = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				item = ValueOrVariable(com.parameters[7], item);
-			}
-
-			value = ControlVariables::Item(com.parameters[6], item);
-			break;
-		}
-		case 5: { // Hero
-			int actor_id = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				actor_id = ValueOrVariable(com.parameters[7], actor_id);
-			}
-			value = ControlVariables::Actor(com.parameters[6], actor_id);
-			break;
-		}
-		case 6: {
-			// Characters
-			int event_id = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				event_id = ValueOrVariable(com.parameters[7], event_id);
-			}
-			value = ControlVariables::Event(com.parameters[6], event_id, *this);
-			break;
-		}
-		case 7:
-			// More
-			value = ControlVariables::Other(com.parameters[5]);
-			break;
-		case 8: {
-			int enemy_id = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				enemy_id = ValueOrVariable(com.parameters[7], enemy_id);
-			}
-
-			// Battle related
-			value = ControlVariables::Enemy(com.parameters[6], enemy_id);
-			break;
-		}
-		case 9: { // Party Member (Maniac)
-			int party_idx = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				party_idx = ValueOrVariable(com.parameters[7], party_idx);
-			}
-			value = ControlVariables::Party(com.parameters[6], party_idx);
-			break;
-		}
-		case 10: {
-			// Switch (Maniac)
-			value = com.parameters[5];
-			if (com.parameters[6] == 1) {
-				value = Main_Data::game_switches->GetInt(value);
-			} else {
-				value = Main_Data::game_switches->GetInt(Main_Data::game_variables->Get(value));
-			}
-			break;
-		}
-		case 11: {
-			// Pow (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[6]);
-			value = ControlVariables::Pow(arg1, arg2);
-			break;
-		}
-		case 12: {
-			// Sqrt (Maniac)
-			int arg = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int mul = com.parameters[6];
-			value = ControlVariables::Sqrt(arg, mul);
-			break;
-		}
-		case 13: {
-			// Sin (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[8]);
-			float mul = static_cast<float>(com.parameters[6]);
-			value = ControlVariables::Sin(arg1, arg2, mul);
-			break;
-		}
-		case 14: {
-			// Cos (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[8]);
-			int mul = com.parameters[6];
-			value = ControlVariables::Cos(arg1, arg2, mul);
-			break;
-		}
-		case 15: {
-			// Atan2 (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[8], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[8], 1, com.parameters[6]);
-			int mul = com.parameters[7];
-			value = ControlVariables::Atan2(arg1, arg2, mul);
-			break;
-		}
-		case 16: {
-			// Min (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[6]);
-			value = ControlVariables::Min(arg1, arg2);
-			break;
-		}
-		case 17: {
-			// Max (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[6]);
-			value = ControlVariables::Max(arg1, arg2);
-			break;
-		}
-		case 18: {
-			// Abs (Maniac)
-			int arg = ValueOrVariableBitfield(com.parameters[6], 0, com.parameters[5]);
-			value = ControlVariables::Abs(arg);
-			break;
-		}
-		case 19: {
-			// Binary (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[8], 0, com.parameters[6]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[8], 1, com.parameters[7]);
-			value = ControlVariables::Binary(com.parameters[5], arg1, arg2);
-			break;
-		}
-		case 20: {
-			// Ternary (Maniac)
-			int mode = com.parameters[10];
-			int arg1 = ValueOrVariableBitfield(mode, 0, com.parameters[6]);
-			int arg2 = ValueOrVariableBitfield(mode, 1, com.parameters[7]);
-			int op = com.parameters[5];
-			if (CheckOperator(arg1, arg2, op)) {
-				value = ValueOrVariableBitfield(mode, 2, com.parameters[8]);
-			} else {
-				value = ValueOrVariableBitfield(mode, 3, com.parameters[9]);
-			}
-			break;
-		}
-		case 21:
-			// Expression (Maniac)
-			value = ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(6, com.parameters[5]), *this);
-			break;
-		default:
-			Output::Warning("ControlVariables: Unsupported operand {}", operand);
-			return true;
+	bool target_eval_result = DecodeTargetEvaluationMode<
+		/* validate_patches */ false,
+		/* support_range_indirect */ true,
+		/* support_expressions */ true,
+		/* support_bitmask */ true,
+		/* support_scopes */ true,
+		/* support_named */ true
+	>(com, start, end);
+	if (!target_eval_result) {
+		Output::Warning("ControlSwitchesEx: Unsupported target evaluation mode {}", com.parameters[0]);
+		return true;
 	}
+
+	int val = com.parameters[3];
+	if (start == end) {
+		ControlSwitches::PerformSwitchOp(val, start);
+		Game_Map::SetNeedRefreshForSwitchChange(start);
+	} else {
+		ControlSwitches::PerformSwitchRangeOp(val, start, end);
+		Game_Map::SetNeedRefresh(true);
+	}
+
+	return true;
+}
+
+bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com) { // code 10220
+
+	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
+	static const auto dispatch_table = ControlVariables::BuildDispatchTable<ControlVariables::eControlVarOp_Default>(Player::IsPatchManiac(), false, false);
+
+	int value = 0;
+	if (!dispatch_table.Execute(value, com, *this))
+		return true;
 
 	int start, end;
 	bool target_eval_result = DecodeTargetEvaluationMode<
@@ -1301,199 +1160,80 @@ bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com
 
 		if (start == end) {
 			// Single variable case - if this is random value, we already called the RNG earlier.
-			switch (operation) {
-				case 0:
-					Main_Data::game_variables->Set(start, value);
-					break;
-				case 1:
-					Main_Data::game_variables->Add(start, value);
-					break;
-				case 2:
-					Main_Data::game_variables->Sub(start, value);
-					break;
-				case 3:
-					Main_Data::game_variables->Mult(start, value);
-					break;
-				case 4:
-					Main_Data::game_variables->Div(start, value);
-					break;
-				case 5:
-					Main_Data::game_variables->Mod(start, value);
-					break;
-				case 6:
-					Main_Data::game_variables->BitOr(start, value);
-					break;
-				case 7:
-					Main_Data::game_variables->BitAnd(start, value);
-					break;
-				case 8:
-					Main_Data::game_variables->BitXor(start, value);
-					break;
-				case 9:
-					Main_Data::game_variables->BitShiftLeft(start, value);
-					break;
-				case 10:
-					Main_Data::game_variables->BitShiftRight(start, value);
-					break;
-			}
+			ControlVariables::PerformVarOp(operation, start, value);
 			Game_Map::SetNeedRefreshForVarChange(start);
 		} else if (com.parameters[4] == 1) {
 			// Multiple variables - Direct variable lookup
-			int var_id = com.parameters[5];
-			switch (operation) {
-				case 0:
-					Main_Data::game_variables->SetRangeVariable(start, end, var_id);
-					break;
-				case 1:
-					Main_Data::game_variables->AddRangeVariable(start, end, var_id);
-					break;
-				case 2:
-					Main_Data::game_variables->SubRangeVariable(start, end, var_id);
-					break;
-				case 3:
-					Main_Data::game_variables->MultRangeVariable(start, end, var_id);
-					break;
-				case 4:
-					Main_Data::game_variables->DivRangeVariable(start, end, var_id);
-					break;
-				case 5:
-					Main_Data::game_variables->ModRangeVariable(start, end, var_id);
-					break;
-				case 6:
-					Main_Data::game_variables->BitOrRangeVariable(start, end, var_id);
-					break;
-				case 7:
-					Main_Data::game_variables->BitAndRangeVariable(start, end, var_id);
-					break;
-				case 8:
-					Main_Data::game_variables->BitXorRangeVariable(start, end, var_id);
-					break;
-				case 9:
-					Main_Data::game_variables->BitShiftLeftRangeVariable(start, end, var_id);
-					break;
-				case 10:
-					Main_Data::game_variables->BitShiftRightRangeVariable(start, end, var_id);
-					break;
-			}
+			ControlVariables::PerformVarRangeOpVariable(operation, start, end, com.parameters[5]);
 			Game_Map::SetNeedRefresh(true);
 		} else if (com.parameters[4] == 2) {
 			// Multiple variables - Indirect variable lookup
-			int var_id = com.parameters[5];
-			switch (operation) {
-				case 0:
-					Main_Data::game_variables->SetRangeVariableIndirect(start, end, var_id);
-					break;
-				case 1:
-					Main_Data::game_variables->AddRangeVariableIndirect(start, end, var_id);
-					break;
-				case 2:
-					Main_Data::game_variables->SubRangeVariableIndirect(start, end, var_id);
-					break;
-				case 3:
-					Main_Data::game_variables->MultRangeVariableIndirect(start, end, var_id);
-					break;
-				case 4:
-					Main_Data::game_variables->DivRangeVariableIndirect(start, end, var_id);
-					break;
-				case 5:
-					Main_Data::game_variables->ModRangeVariableIndirect(start, end, var_id);
-					break;
-				case 6:
-					Main_Data::game_variables->BitOrRangeVariableIndirect(start, end, var_id);
-					break;
-				case 7:
-					Main_Data::game_variables->BitAndRangeVariableIndirect(start, end, var_id);
-					break;
-				case 8:
-					Main_Data::game_variables->BitXorRangeVariableIndirect(start, end, var_id);
-					break;
-				case 9:
-					Main_Data::game_variables->BitShiftLeftRangeVariableIndirect(start, end, var_id);
-					break;
-				case 10:
-					Main_Data::game_variables->BitShiftRightRangeVariableIndirect(start, end, var_id);
-					break;
-			}
+			ControlVariables::PerformVarRangeOpVariableIndirect(operation, start, end, com.parameters[5]);
 			Game_Map::SetNeedRefresh(true);
 		} else if (com.parameters[4] == 3) {
 			// Multiple variables - random
 			int rmax = max(com.parameters[5], com.parameters[6]);
 			int rmin = min(com.parameters[5], com.parameters[6]);
-			switch (operation) {
-				case 0:
-					Main_Data::game_variables->SetRangeRandom(start, end, rmin, rmax);
-					break;
-				case 1:
-					Main_Data::game_variables->AddRangeRandom(start, end, rmin, rmax);
-					break;
-				case 2:
-					Main_Data::game_variables->SubRangeRandom(start, end, rmin, rmax);
-					break;
-				case 3:
-					Main_Data::game_variables->MultRangeRandom(start, end, rmin, rmax);
-					break;
-				case 4:
-					Main_Data::game_variables->DivRangeRandom(start, end, rmin, rmax);
-					break;
-				case 5:
-					Main_Data::game_variables->ModRangeRandom(start, end, rmin, rmax);
-					break;
-				case 6:
-					Main_Data::game_variables->BitOrRangeRandom(start, end, rmin, rmax);
-					break;
-				case 7:
-					Main_Data::game_variables->BitAndRangeRandom(start, end, rmin, rmax);
-					break;
-				case 8:
-					Main_Data::game_variables->BitXorRangeRandom(start, end, rmin, rmax);
-					break;
-				case 9:
-					Main_Data::game_variables->BitShiftLeftRangeRandom(start, end, rmin, rmax);
-					break;
-				case 10:
-					Main_Data::game_variables->BitShiftRightRangeRandom(start, end, rmin, rmax);
-					break;
-			}
+			ControlVariables::PerformVarRangeOpRandom(operation, start, end, rmin, rmax);
 			Game_Map::SetNeedRefresh(true);
 		} else {
 			// Multiple variables - constant
-			switch (operation) {
-				case 0:
-					Main_Data::game_variables->SetRange(start, end, value);
-					break;
-				case 1:
-					Main_Data::game_variables->AddRange(start, end, value);
-					break;
-				case 2:
-					Main_Data::game_variables->SubRange(start, end, value);
-					break;
-				case 3:
-					Main_Data::game_variables->MultRange(start, end, value);
-					break;
-				case 4:
-					Main_Data::game_variables->DivRange(start, end, value);
-					break;
-				case 5:
-					Main_Data::game_variables->ModRange(start, end, value);
-					break;
-				case 6:
-					Main_Data::game_variables->BitOrRange(start, end, value);
-					break;
-				case 7:
-					Main_Data::game_variables->BitAndRange(start, end, value);
-					break;
-				case 8:
-					Main_Data::game_variables->BitXorRange(start, end, value);
-					break;
-				case 9:
-					Main_Data::game_variables->BitShiftLeftRange(start, end, value);
-					break;
-				case 10:
-					Main_Data::game_variables->BitShiftRightRange(start, end, value);
-					break;
-			}
+			ControlVariables::PerformVarRangeOp(operation, start, end, value);
 			Game_Map::SetNeedRefresh(true);
 		}
+	}
+
+	return true;
+}
+
+bool Game_Interpreter::CommandEasyRpgControlVariablesEx(lcf::rpg::EventCommand const& com) { // 2022
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	static const auto dispatch_table = ControlVariables::BuildDispatchTable<ControlVariables::eControlVarOp_Ex>(true, false, true);
+
+	int value = 0;
+	if (!dispatch_table.Execute(value, com, *this))
+		return true;
+
+	int start, end;
+	bool target_eval_result = DecodeTargetEvaluationMode<
+		/* validate_patches */ false,
+		/* support_range_indirect */ true,
+		/* support_expressions */ true,
+		/* support_bitmask */ true,
+		/* support_scopes */ true,
+		/* support_named */ true
+	>(com, start, end);
+	if (!target_eval_result) {
+		Output::Warning("ControlVariablesEx: Unsupported target evaluation mode {}", com.parameters[0]);
+		return true;
+	}
+
+	int operation = com.parameters[3];
+	if (start == end) {
+		// Single variable case - if this is random value, we already called the RNG earlier.
+		ControlVariables::PerformVarOp(operation, start, value);
+		Game_Map::SetNeedRefreshForVarChange(start);
+	} else if (com.parameters[4] == 1) {
+		// Multiple variables - Direct variable lookup
+		ControlVariables::PerformVarRangeOpVariable(operation, start, end, com.parameters[5]);
+		Game_Map::SetNeedRefresh(true);
+	} else if (com.parameters[4] == 2) {
+		// Multiple variables - Indirect variable lookup
+		ControlVariables::PerformVarRangeOpVariableIndirect(operation, start, end, com.parameters[5]);
+		Game_Map::SetNeedRefresh(true);
+	} else if (com.parameters[4] == 3) {
+		// Multiple variables - random
+		int rmax = max(com.parameters[5], com.parameters[6]);
+		int rmin = min(com.parameters[5], com.parameters[6]);
+		ControlVariables::PerformVarRangeOpRandom(operation, start, end, rmin, rmax);
+		Game_Map::SetNeedRefresh(true);
+	} else {
+		// Multiple variables - constant
+		ControlVariables::PerformVarRangeOp(operation, start, end, value);
+		Game_Map::SetNeedRefresh(true);
 	}
 
 	return true;
@@ -3403,242 +3143,35 @@ bool Game_Interpreter::CommandChangeMainMenuAccess(lcf::rpg::EventCommand const&
 }
 
 bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& com) { // Code 12010
-	const auto& frame = GetFrame();
 
-	bool result = false;
-	int value1, value2;
-	int actor_id;
-	Game_Actor* actor;
-	Game_Character* character;
+	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
+	static const auto dispatch_table = ConditionalBranching::BuildDispatchTable<ConditionalBranching::eCondBranch_Default>(Player::IsRPG2k3Commands(), Player::IsPatchManiac(), false, false);
 
-	switch (com.parameters[0]) {
-	case 0:
-		// Switch
-		result = Main_Data::game_switches->Get(com.parameters[1]) == (com.parameters[2] == 0);
-		break;
-	case 1:
-		// Variable
-		value1 = Main_Data::game_variables->Get(com.parameters[1]);
-		value2 = ValueOrVariable(com.parameters[2], com.parameters[3]);
-		result = CheckOperator(value1, value2, com.parameters[4]);
-		break;
-	case 2:
-		value1 = Main_Data::game_party->GetTimerSeconds(Main_Data::game_party->Timer1);
-		value2 = com.parameters[1];
-		switch (com.parameters[2]) {
-		case 0:
-			result = (value1 >= value2);
-			break;
-		case 1:
-			result = (value1 <= value2);
-			break;
-		}
-		break;
-	case 3:
-		// Gold
-		if (com.parameters[2] == 0) {
-			// Greater than or equal
-			result = (Main_Data::game_party->GetGold() >= com.parameters[1]);
-		} else {
-			// Less than or equal
-			result = (Main_Data::game_party->GetGold() <= com.parameters[1]);
-		}
-		break;
-	case 4:
-		// Item
-		if (com.parameters[2] == 0) {
-			// Having
-			result = Main_Data::game_party->GetItemCount(com.parameters[1])
-				+ Main_Data::game_party->GetEquippedItemCount(com.parameters[1]) > 0;
-		} else {
-			// Not having
-			result = Main_Data::game_party->GetItemCount(com.parameters[1])
-				+ Main_Data::game_party->GetEquippedItemCount(com.parameters[1]) == 0;
-		}
-		break;
-	case 5:
-		// Hero
-		actor_id = com.parameters[1];
-		actor = Main_Data::game_actors->GetActor(actor_id);
-
-		if (!actor) {
-			Output::Warning("ConditionalBranch: Invalid actor ID {}", actor_id);
-			// Use Else Branch
-			SetSubcommandIndex(com.indent, 1);
-			SkipToNextConditional({Cmd::ElseBranch, Cmd::EndBranch}, com.indent);
-			return true;
-		}
-
-		switch (com.parameters[2]) {
-		case 0:
-			// Is actor in party
-			result = Main_Data::game_party->IsActorInParty(actor_id);
-			break;
-		case 1:
-			// Name
-			result = (actor->GetName() == com.string);
-			break;
-		case 2:
-			// Higher or equal level
-			result = (actor->GetLevel() >= com.parameters[3]);
-			break;
-		case 3:
-			// Higher or equal HP
-			result = (actor->GetHp() >= com.parameters[3]);
-			break;
-		case 4:
-			// Is skill learned
-			result = (actor->IsSkillLearned(com.parameters[3]));
-			break;
-		case 5:
-			// Equipped object
-			result = (
-				(actor->GetShieldId() == com.parameters[3]) ||
-				(actor->GetArmorId() == com.parameters[3]) ||
-				(actor->GetHelmetId() == com.parameters[3]) ||
-				(actor->GetAccessoryId() == com.parameters[3]) ||
-				(actor->GetWeaponId() == com.parameters[3])
-				);
-			break;
-		case 6:
-			// Has state
-			result = (actor->HasState(com.parameters[3]));
-			break;
-		default:
-			;
-		}
-		break;
-	case 6:
-		// Orientation of char
-		character = GetCharacter(com.parameters[1]);
-		if (character != NULL) {
-			result = character->GetFacing() == com.parameters[2];
-		}
-		break;
-	case 7: {
-		// Vehicle in use
-		Game_Vehicle::Type vehicle_id = (Game_Vehicle::Type) (com.parameters[1] + 1);
-		Game_Vehicle* vehicle = Game_Map::GetVehicle(vehicle_id);
-
-		if (!vehicle) {
-			Output::Warning("ConditionalBranch: Invalid vehicle ID {}", static_cast<int>(vehicle_id));
-			return true;
-		}
-
-		result = vehicle->IsInUse();
-		break;
-	}
-	case 8:
-		// Key decision initiated this event
-		result = frame.triggered_by_decision_key;
-		break;
-	case 9:
-		// BGM looped at least once
-		result = Main_Data::game_system->BgmPlayedOnce();
-		break;
-	case 10:
-		if (Player::IsRPG2k3Commands()) {
-			value1 = Main_Data::game_party->GetTimerSeconds(Main_Data::game_party->Timer2);
-			value2 = com.parameters[1];
-			switch (com.parameters[2]) {
-				case 0:
-					result = (value1 >= value2);
-					break;
-				case 1:
-					result = (value1 <= value2);
-					break;
-			}
-		}
-		break;
-	case 11:
-		// RPG Maker 2003 v1.11 features
-		if (Player::IsRPG2k3ECommands()) {
-			switch (com.parameters[1]) {
-				case 0:
-					// Any savestate available
-					result = FileFinder::HasSavegame();
-					break;
-				case 1:
-					// Is Test Play mode?
-					result = Player::debug_flag;
-					break;
-				case 2:
-					// Is ATB wait on?
-					result = Main_Data::game_system->GetAtbMode() == lcf::rpg::SaveSystem::AtbMode_atb_wait;
-					break;
-				case 3:
-					// Is Fullscreen active?
-					result = DisplayUi->IsFullscreen();
-					break;
-			}
-		}
-		break;
-	case 12:
-		// Maniac: Other
-		if (Player::IsPatchManiac()) {
-			switch (com.parameters[1]) {
-				case 0:
-					result = Main_Data::game_system->IsLoadedThisFrame();
-					break;
-				case 1:
-					// Joypad is active (We always read from Controller so simply report 'true')
-#if defined(USE_JOYSTICK) && defined(SUPPORT_JOYSTICK)
-					result = true;
-#else
-					result = false;
-#endif
-					break;
-				case 2:
-					// FIXME: Window has focus. Needs function exposed in DisplayUi
-					// Assuming 'true' as Player usually suspends when loosing focus
-					result = true;
-					break;
-			}
-		}
-		break;
-	case 13:
-		// Maniac: Switch through Variable
-		if (Player::IsPatchManiac()) {
-			result = Main_Data::game_switches->Get(Main_Data::game_variables->Get(com.parameters[1])) == (com.parameters[2] == 0);
-		}
-		break;
-	case 14:
-		// Maniac: Variable indirect
-		if (Player::IsPatchManiac()) {
-			value1 = Main_Data::game_variables->GetIndirect(com.parameters[1]);
-			value2 = ValueOrVariable(com.parameters[2], com.parameters[3]);
-			result = CheckOperator(value1, value2, com.parameters[4]);
-		}
-		break;
-	case 15:
-		// Maniac: string comparison
-		if (Player::IsPatchManiac()) {
-			int modes[] = {
-				(com.parameters[1]     ) & 15, //str_l mode: 0 = direct, 1 = indirect
-				(com.parameters[1] >> 4) & 15, //str_r mode: 0 = literal, 1 = direct, 2 = indirect
-			};
-
-			int op = com.parameters[4] & 3;
-			int ignoreCase = com.parameters[4] >> 8 & 1;
-
-			std::string str_param = ToString(com.string);
-			StringView str_l = Main_Data::game_strings->GetWithMode(str_param, modes[0]+1, com.parameters[2], *Main_Data::game_variables);
-			StringView str_r = Main_Data::game_strings->GetWithMode(str_param, modes[1], com.parameters[3], *Main_Data::game_variables);
-			result = ManiacPatch::CheckString(str_l, str_r, op, ignoreCase);
-		}
-		break;
-	case 16:
-		// Maniac: Expression
-		result = ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(6), *this);
-		break;
-	default:
-		Output::Warning("ConditionalBranch: Branch {} unsupported", com.parameters[0]);
-	}
+	bool result = dispatch_table.Execute(com, *this);
 
 	int sub_idx = subcommand_sentinel;
 	if (!result) {
 		sub_idx = eOptionBranchElse;
-		SkipToNextConditional({Cmd::ElseBranch, Cmd::EndBranch}, com.indent);
+		SkipToNextConditional({ Cmd::ElseBranch, Cmd::EndBranch }, com.indent);
+	}
+
+	SetSubcommandIndex(com.indent, sub_idx);
+	return true;
+}
+
+bool Game_Interpreter::CommandEasyRpgConditionalBranchEx(lcf::rpg::EventCommand const& com) { // Code 2020
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
+	static const auto dispatch_table = ConditionalBranching::BuildDispatchTable<ConditionalBranching::eCondBranch_Ex>(true, true, false, true);
+
+	bool result = dispatch_table.Execute(com, *this);
+
+	int sub_idx = subcommand_sentinel;
+	if (!result) {
+		sub_idx = eOptionBranchElse;
+		SkipToNextConditional({ Cmd::ElseBranch, Cmd::EndBranch }, com.indent);
 	}
 
 	SetSubcommandIndex(com.indent, sub_idx);
@@ -5049,6 +4582,9 @@ bool Game_Interpreter::CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand c
 
 	if (flag_name == "rpg2k-battle")
 		lcf::Data::system.easyrpg_use_rpg2k_battle_system = flag_value;
+
+	ControlVariables::RebuildDispatchTables(Player::IsPatchManiac(), false, false);
+	ConditionalBranching::RebuildDispatchTables(Player::IsRPG2k3Commands(), Player::IsPatchManiac(), false, false);
 
 	return true;
 }

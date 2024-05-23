@@ -300,13 +300,13 @@ int process(std::vector<int32_t>::iterator& it, std::vector<int32_t>::iterator e
 						return 0;
 					}
 					imm3 = process(it, end, ip);
-					return ControlVariables::Event(process(it, end, ip), imm3, ip);
+					return ControlVariables::Event<true>(process(it, end, ip), imm3, ip);
 				case Fn::Actor:
 					if (imm2 != 2) {
 						Output::Warning("Maniac: Expression actor args {} != 2", imm2);
 						return 0;
 					}
-					return ControlVariables::Actor(process(it, end, ip), imm3);
+					return ControlVariables::Actor<true>(process(it, end, ip), imm3);
 				case Fn::Party:
 					if (imm2 != 2) {
 						Output::Warning("Maniac: Expression member args {} != 2", imm2);
@@ -320,14 +320,14 @@ int process(std::vector<int32_t>::iterator& it, std::vector<int32_t>::iterator e
 						return 0;
 					}
 					imm3 = process(it, end, ip);
-					return ControlVariables::Enemy(process(it, end, ip), imm3);
+					return ControlVariables::Enemy<true>(process(it, end, ip), imm3);
 					break;
 				case Fn::Misc:
 					if (imm2 != 1) {
 						Output::Warning("Maniac: Expression misc args {} != 1", imm2);
 						return 0;
 					}
-					return ControlVariables::Other(process(it, end, ip));
+					return ControlVariables::Other<true>(process(it, end, ip));
 				case Fn::Pow:
 					if (imm2 != 2) {
 						Output::Warning("Maniac: Expression pow args {} != 2", imm2);

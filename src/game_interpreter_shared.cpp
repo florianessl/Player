@@ -16,26 +16,9 @@
  */
 
 #include "game_interpreter_shared.h"
-#include "game_actors.h"
-#include "game_enemyparty.h"
-#include "game_ineluki.h"
-#include "game_map.h"
-#include "game_party.h"
-#include "game_player.h"
 #include "game_switches.h"
-#include "game_system.h"
 #include "maniac_patch.h"
 #include "main_data.h"
-#include "output.h"
-#include "player.h"
-#include "rand.h"
-#include "util_macro.h"
-#include "utils.h"
-#include "audio.h"
-#include "baseui.h"
-#include <cmath>
-#include <cstdint>
-#include <lcf/rpg/savepartylocation.h>
 
 using Main_Data::game_switches, Main_Data::game_variables, Main_Data::game_strings;
 
