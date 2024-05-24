@@ -43,6 +43,8 @@ enum TargetType {
 	Enemy,
 };
 
+using namespace Game_Interpreter_Shared;
+
 // Implemented as a static map, since maniac hooks can only have one common event callback at a time.
 // Subsequent calls will simply override the previous common event callback.
 std::map<Game_Interpreter_Battle::ManiacBattleHookType, std::tuple<int, int>> Game_Interpreter_Battle::maniac_hooks;
@@ -460,7 +462,7 @@ bool Game_Interpreter_Battle::CommandShowHiddenMonster(lcf::rpg::EventCommand co
 }
 
 bool Game_Interpreter_Battle::CommandChangeBattleBG(lcf::rpg::EventCommand const& com) {
-	Game_Battle::ChangeBackground(ToString(com.string));
+	Game_Battle::ChangeBackground(ToString(CommandString(com)));
 	return true;
 }
 

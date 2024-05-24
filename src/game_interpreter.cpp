@@ -2150,7 +2150,7 @@ bool Game_Interpreter::CommandChangeVehicleGraphic(lcf::rpg::EventCommand const&
 		return true;
 	}
 
-	const std::string& name = ToString(com.string);
+	const std::string& name = ToString(CommandString(com));
 	int vehicle_index = com.parameters[1];
 
 	vehicle->SetSpriteGraphic(name, vehicle_index);
@@ -2162,7 +2162,7 @@ bool Game_Interpreter::CommandChangeVehicleGraphic(lcf::rpg::EventCommand const&
 bool Game_Interpreter::CommandChangeSystemBGM(lcf::rpg::EventCommand const& com) { //code 10660
 	lcf::rpg::Music music;
 	int context = com.parameters[0];
-	music.name = ToString(com.string);
+	music.name = ToString(CommandString(com));
 	music.fadein = com.parameters[1];
 	music.volume = com.parameters[2];
 	music.tempo = com.parameters[3];
@@ -2174,7 +2174,7 @@ bool Game_Interpreter::CommandChangeSystemBGM(lcf::rpg::EventCommand const& com)
 bool Game_Interpreter::CommandChangeSystemSFX(lcf::rpg::EventCommand const& com) { //code 10670
 	lcf::rpg::Sound sound;
 	int context = com.parameters[0];
-	sound.name = ToString(com.string);
+	sound.name = ToString(CommandString(com));
 	sound.volume = com.parameters[1];
 	sound.tempo = com.parameters[2];
 	sound.balance = com.parameters[3];
@@ -2717,7 +2717,7 @@ bool Game_Interpreter::CommandShowPicture(lcf::rpg::EventCommand const& com) { /
 	int pic_id = com.parameters[0];
 
 	Game_Pictures::ShowParams params = {};
-	params.name = ToString(com.string);
+	params.name = ToString(CommandString(com));
 	// Maniac Patch uses the upper bits for X/Y origin, mask it away
 	int pos_mode = ManiacBitmask(com.parameters[1], 0xFF);
 	params.position_x = ValueOrVariable(pos_mode, com.parameters[2]);
@@ -3313,7 +3313,7 @@ bool Game_Interpreter::CommandChangeMapTileset(lcf::rpg::EventCommand const& com
 
 bool Game_Interpreter::CommandChangePBG(lcf::rpg::EventCommand const& com) { // code 11720
 	Game_Map::Parallax::Params params;
-	params.name = ToString(com.string);
+	params.name = ToString(CommandString(com));
 	params.scroll_horz = com.parameters[0] != 0;
 	params.scroll_vert = com.parameters[1] != 0;
 	params.scroll_horz_auto = com.parameters[2] != 0;
@@ -3488,7 +3488,7 @@ bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& co
 			break;
 		case 1:
 			// Name
-			result = (actor->GetName() == com.string);
+			result = (actor->GetName() == CommandString(com));
 			break;
 		case 2:
 			// Higher or equal level

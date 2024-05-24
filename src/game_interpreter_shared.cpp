@@ -20,6 +20,7 @@
 #include "game_enemyparty.h"
 #include "game_ineluki.h"
 #include "game_map.h"
+#include "game_message.h"
 #include "game_party.h"
 #include "game_player.h"
 #include "game_switches.h"
@@ -157,34 +158,56 @@ int Game_Interpreter_Shared::ValueOrVariableBitfield(lcf::rpg::EventCommand cons
 
 	return com.parameters[val_idx];
 }
+namespace {
+	StringView ApplyTextInsertingOnCommandString(StringView com_string) {
+#ifdef LIBLCF_STUB_COMSTRING_VARSUBSTITUTION
+		if (!Player::HasEasyRpgExtensions()) {
+#else
+		if (!Player::HasEasyRpgExtensions() || !lcf::Data::system.easyrpg_var_substitution_in_commands) {
+#endif
+			return com_string;
+		}
+		auto it = std::find(com_string.begin(), com_string.end(), Player::escape_char);
+		if (it == com_string.end()) {
+			return com_string;
+		}
+		return PendingMessage::ApplyTextInsertingCommands(ToString(com_string), Player::escape_char, Game_Message::CommandCodeInserter);
+	}
+}
+
+StringView Game_Interpreter_Shared::CommandString(lcf::rpg::EventCommand const& com) {
+	return ApplyTextInsertingOnCommandString(com.string);
+}
 
 StringView Game_Interpreter_Shared::CommandStringOrVariable(lcf::rpg::EventCommand const& com, int mode_idx, int val_idx) {
 	if (!Player::IsPatchManiac()) {
-		return com.string;
+		return CommandString(com);
 	}
 
 	assert(mode_idx != val_idx);
 
 	if (static_cast<int>(com.parameters.size()) > std::max(mode_idx, val_idx)) {
-		return game_strings->GetWithMode(com.string, com.parameters[mode_idx], com.parameters[val_idx], *game_variables);
+		auto com_string = game_strings->GetWithMode(com.string, com.parameters[mode_idx], com.parameters[val_idx], *game_variables);
+		return ApplyTextInsertingOnCommandString(com_string);
 	}
 
-	return com.string;
+	return CommandString(com);
 }
 
 StringView Game_Interpreter_Shared::CommandStringOrVariableBitfield(lcf::rpg::EventCommand const& com, int mode_idx, int shift, int val_idx) {
 	if (!Player::IsPatchManiac()) {
-		return com.string;
+		return CommandString(com);
 	}
 
 	assert(mode_idx != val_idx);
 
 	if (static_cast<int>(com.parameters.size()) >= std::max(mode_idx, val_idx) + 1) {
 		int mode = com.parameters[mode_idx];
-		return game_strings->GetWithMode(com.string, (mode & (0xF << shift * 4)) >> shift * 4, com.parameters[val_idx], *game_variables);
+		auto com_string = game_strings->GetWithMode(com.string, (mode & (0xF << shift * 4)) >> shift * 4, com.parameters[val_idx], *game_variables);
+		return ApplyTextInsertingOnCommandString(com_string);
 	}
 
-	return com.string;
+	return CommandString(com);
 }
 
 
