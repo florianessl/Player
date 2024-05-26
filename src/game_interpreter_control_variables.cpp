@@ -24,9 +24,12 @@
 #include "game_actors.h"
 #include "game_enemyparty.h"
 #include "game_ineluki.h"
+#include "game_map.h"
 #include "game_party.h"
 #include "game_player.h"
+#include "game_switches.h"
 #include "game_system.h"
+#include "maniac_patch.h"
 #include "main_data.h"
 #include "output.h"
 #include "player.h"
@@ -41,9 +44,11 @@
 
 
 namespace ControlSwitches {
-	void PerformSwitchOp(int operation, int switch_id);
+	template<DataScopeType = DataScopeType::eDataScope_Global, typename... Args>
+	void PerformSwitchOp(int operation, int switch_id, Args... args);
 
-	void PerformSwitchRangeOp(int operation, int start, int end);
+	template<DataScopeType = DataScopeType::eDataScope_Global, typename... Args>
+	void PerformSwitchRangeOp(int operation, int start, int end, Args... args);
 }
 
 namespace ControlVariables {
@@ -213,11 +218,16 @@ namespace ControlVariables {
 
 	void RebuildDispatchTables(const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx);
 
-	void PerformVarOp(int operation, int var_id, int value);
-	void PerformVarRangeOp(int operation, int start, int end, int value);
-	void PerformVarRangeOpVariable(int operation, int start, int end, int var_id);
-	void PerformVarRangeOpVariableIndirect(int operation, int start, int end, int var_id);
-	void PerformVarRangeOpRandom(int operation, int start, int end, int rmin, int max);
+	template<DataScopeType = DataScopeType::eDataScope_Global, typename... Args>
+	void PerformVarOp(int operation, int var_id, int value, Args... args);
+	template<DataScopeType = DataScopeType::eDataScope_Global, typename... Args>
+	void PerformVarRangeOp(int operation, int start, int end, int value, Args... args);
+	template<DataScopeType = DataScopeType::eDataScope_Global, typename... Args>
+	void PerformVarRangeOpVariable(int operation, int start, int end, int var_id, Args... args);
+	template<DataScopeType = DataScopeType::eDataScope_Global, typename... Args>
+	void PerformVarRangeOpVariableIndirect(int operation, int start, int end, int var_id, Args... args);
+	template<DataScopeType = DataScopeType::eDataScope_Global, typename... Args>
+	void PerformVarRangeOpRandom(int operation, int start, int end, int rmin, int max, Args... args);
 }
 
 namespace ConditionalBranching {
@@ -319,19 +329,21 @@ using Main_Data::game_switches, Main_Data::game_variables, Main_Data::game_strin
 
 using Main_Data::game_party, Main_Data::game_actors, Main_Data::game_ineluki, Main_Data::game_enemyparty, Main_Data::game_system;
 
-inline void ControlSwitches::PerformSwitchOp(int operation, int switch_id) {
+template<DataScopeType S, typename... Args>
+inline void ControlSwitches::PerformSwitchOp(int operation, int switch_id, Args... args) {
 	if (operation < 2) {
-		game_switches->Set(switch_id, operation == 0);
+		game_switches->Set<S>(switch_id, operation == 0, args...);
 	} else {
-		game_switches->Flip(switch_id);
+		game_switches->Flip<S>(switch_id, args...);
 	}
 }
 
-inline void ControlSwitches::PerformSwitchRangeOp(int operation, int start, int end) {
+template<DataScopeType S, typename... Args>
+inline void ControlSwitches::PerformSwitchRangeOp(int operation, int start, int end, Args... args) {
 	if (operation < 2) {
-		game_switches->SetRange(start, end, operation == 0);
+		game_switches->SetRange<S>(start, end, operation == 0, args...);
 	} else {
-		game_switches->FlipRange(start, end);
+		game_switches->FlipRange<S>(start, end, args...);
 	}
 }
 
@@ -550,6 +562,179 @@ namespace ControlVariables {
 	{
 		return ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(param_offset + 1, com.parameters[param_offset]), interpreter);
 	}
+
+	template <int param_offset>
+	static inline int FrameSwitch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		int id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 1, com.parameters[param_offset + 1], interpreter);
+		return game_switches->Get<eDataScope_Frame>(id, &interpreter.GetFrame());
+	}
+
+	template <int param_offset>
+	static inline int MapScopeSwitch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		int id, map_id;
+		bool direct = (com.parameters[param_offset] & 0xF) == 0;
+
+		id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 1, com.parameters[param_offset + 1], interpreter);
+		map_id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 2, com.parameters[param_offset + 2], interpreter);
+
+		if (map_id == 0)
+			map_id = Game_Map::GetMapId();
+
+		return direct ? EvaluateMapTreeSwitch(0, id, map_id) : EvaluateMapTreeSwitch(1, id, map_id);
+	}
+
+	template <int param_offset>
+	static inline int MapEventScopeSwitch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		int id, map_id, evt_id;
+		bool direct = (com.parameters[param_offset] & 0xF) == 0;
+
+		id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 1, com.parameters[param_offset + 1], interpreter);
+		map_id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 2, com.parameters[param_offset + 2], interpreter);
+		evt_id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 3, com.parameters[param_offset + 3], interpreter);
+
+		if (map_id == 0)
+			map_id = Game_Map::GetMapId();
+		if (evt_id == 0 || evt_id == Game_Character::CharThisEvent)
+			evt_id = interpreter.GetThisEventId();
+
+		if (direct)
+			return game_switches->GetInt<DataScopeType::eDataScope_MapEvent>(id, map_id, evt_id);
+
+		id = game_variables->Get(id);
+		return game_switches->GetInt<DataScopeType::eDataScope_MapEvent>(id, map_id, evt_id);
+	}
+
+	template <int param_offset>
+	static inline int FrameVariable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		int id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 1, com.parameters[param_offset + 1], interpreter);
+		return game_variables->Get<eDataScope_Frame>(id, &interpreter.GetFrame());
+	}
+
+	template <int param_offset>
+	static inline int MapScopeVariable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		int id, map_id;
+		int mode = (com.parameters[param_offset] & 0xF) == 0 ? ValueEvalMode::eValueEval_MapScopeVariable : ValueEvalMode::eValueEval_MapScopeVariableIndirect;
+
+		id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 1, com.parameters[param_offset + 1], interpreter);
+		map_id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 2, com.parameters[param_offset + 2], interpreter);
+
+		if (map_id == 0)
+			map_id = Game_Map::GetMapId();
+
+		return scopedValueOrVariable(mode, id, map_id);
+	}
+
+	template <int param_offset>
+	static inline int MapEventScopeVariable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		int id, map_id, evt_id;
+		int mode = (com.parameters[param_offset] & 0xF) == 0 ? ValueEvalMode::eValueEval_MapEventScopeVariable : ValueEvalMode::eValueEval_MapEventScopeVariableIndirect;
+
+		id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 1, com.parameters[param_offset + 1], interpreter);
+		map_id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 2, com.parameters[param_offset + 2], interpreter);
+		evt_id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 3, com.parameters[param_offset + 3], interpreter);
+
+		if (map_id == 0)
+			map_id = Game_Map::GetMapId();
+		if (evt_id == 0 || evt_id == Game_Character::CharThisEvent)
+			evt_id = interpreter.GetThisEventId();
+
+		return scopedValueOrVariable(mode, id, map_id, evt_id);
+	}
+
+	template<int param_offset, DataScopeType S>
+	static inline int PerformCountScopedSwitches(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int id, arg, map_id;
+
+		id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 0, com.parameters[param_offset + 1], interpreter);
+		arg = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 1, com.parameters[param_offset + 2], interpreter);
+		map_id = 0;
+		if constexpr (S == eDataScope_MapEvent)
+			map_id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 2, com.parameters[param_offset + 3], interpreter);
+
+		if (map_id == 0)
+			map_id = Game_Map::GetMapId();
+
+		if (arg < 2) {
+			auto cond = [arg](const bool v) {
+				return v == (arg == 0);
+			};
+
+			if constexpr (S == eDataScope_Map)
+				return game_switches->scoped_map.CountElementsWithCondition(cond, id);
+
+			return game_switches->scoped_mapevent.CountElementsWithCondition(cond, id, map_id);
+		} else {
+			bool arg_defined = arg == 2;
+
+			if constexpr (S == eDataScope_Map)
+				return game_switches->scoped_map.CountElementsDefined(arg_defined, id);
+
+			return game_switches->scoped_mapevent.CountElementsDefined(arg_defined, id, map_id);
+		}
+	}
+
+	template<int param_offset, DataScopeType S>
+	static inline int PerformCountScopedVariables(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int id, arg, op, map_id;
+
+		id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 0, com.parameters[param_offset + 1], interpreter);
+		arg = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 1, com.parameters[param_offset + 2], interpreter);
+		op = com.parameters[param_offset + 3];
+		map_id = 0;
+		if constexpr (S == eDataScope_MapEvent)
+			map_id = ValueOrVariableBitfield<false, true, true, true>(com.parameters[param_offset], 2, com.parameters[param_offset + 4], interpreter);
+
+		if (map_id == 0)
+			map_id = Game_Map::GetMapId();
+
+		if (op < 6) {
+			auto cond = [arg, op](const int v) {
+				return CheckOperator(arg, v, op);
+			};
+
+			if constexpr (S == eDataScope_Map)
+				return game_variables->scoped_map.CountElementsWithCondition(cond, id);
+
+			return game_variables->scoped_mapevent.CountElementsWithCondition(cond, id, map_id);
+		} else {
+			bool arg_defined = arg == 6;
+
+			if constexpr (S == eDataScope_Map)
+				return game_variables->scoped_map.CountElementsDefined(arg_defined, id);
+
+			return game_variables->scoped_mapevent.CountElementsDefined(arg_defined, id, map_id);
+		}
+	}
+
+	template <int param_offset>
+	int CountScopedSwitchesMap(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		return PerformCountScopedSwitches<param_offset, eDataScope_Map>(com, interpreter);
+	}
+
+	template <int param_offset>
+	int CountScopedSwitchesMapEvent(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		return PerformCountScopedSwitches<param_offset, eDataScope_MapEvent>(com, interpreter);
+	}
+
+	template <int param_offset>
+	int CountScopedVariablesMap(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		return PerformCountScopedVariables<param_offset, eDataScope_Map>(com, interpreter);
+	}
+
+	template <int param_offset>
+	int CountScopedVariablesMapEvent(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		return PerformCountScopedVariables<param_offset, eDataScope_MapEvent>(com, interpreter);
+	}
 }
 
 EP_ALWAYS_INLINE bool ControlVariables::dispatch_table_varoperand::Execute(int& value_out, lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) const {
@@ -598,6 +783,19 @@ const ControlVariables::dispatch_table_varoperand& ControlVariables::BuildDispat
 	}
 	// end Vanilla operands
 
+	if (includeEasyRpgEx) {
+		ops[eVarOperand_EasyRpg_FrameSwitch] = &FrameSwitch<get_param_offset(op_type)>;
+		ops[eVarOperand_EasyRpg_ScopedSwitch_Map] = &MapScopeSwitch<get_param_offset(op_type)>;
+		ops[eVarOperand_EasyRpg_ScopedSwitch_MapEvent] = &MapEventScopeSwitch<get_param_offset(op_type)>;
+		ops[eVarOperand_EasyRpg_FrameVariable] = &FrameVariable<get_param_offset(op_type)>;
+		ops[eVarOperand_EasyRpg_ScopedVariable_Map] = &MapScopeVariable<get_param_offset(op_type)>;
+		ops[eVarOperand_EasyRpg_ScopedVariable_MapEvent] = &MapEventScopeVariable<get_param_offset(op_type)>;
+		ops[eVarOperand_EasyRpg_CountScopedSwitchesMatchingCondition_Map] = &CountScopedSwitchesMap<get_param_offset(op_type)>;
+		ops[eVarOperand_EasyRpg_CountScopedSwitchesMatchingCondition_MapEvent] = &CountScopedSwitchesMapEvent<get_param_offset(op_type)>;
+		ops[eVarOperand_EasyRpg_CountScopedVarsMatchingCondition_Map] = &CountScopedVariablesMap<get_param_offset(op_type)>;
+		ops[eVarOperand_EasyRpg_CountScopedVarsMatchingCondition_MapEvent] = &CountScopedVariablesMapEvent<get_param_offset(op_type)>;
+	}
+
 	if (includeManiacs_200128) {
 		ops[eVarOperand_Maniacs_Party] = &Party<get_param_offset(op_type)>;
 		ops[eVarOperand_Maniacs_Switch] = &Switch<get_param_offset(op_type)>;
@@ -645,192 +843,197 @@ void ControlVariables::RebuildDispatchTables(const bool includeManiacs_200128, c
 	}
 }
 
-inline void ControlVariables::PerformVarOp(int operation, int var_id, int value) {
+template<DataScopeType S, typename... Args>
+inline void ControlVariables::PerformVarOp(int operation, int var_id, int value, Args... args) {
 	switch (operation) {
 		case 0:
-			game_variables->Set(var_id, value);
+			game_variables->Set<S>(var_id, value, args...);
 			break;
 		case 1:
-			game_variables->Add(var_id, value);
+			game_variables->Add<S>(var_id, value, args...);
 			break;
 		case 2:
-			game_variables->Sub(var_id, value);
+			game_variables->Sub<S>(var_id, value, args...);
 			break;
 		case 3:
-			game_variables->Mult(var_id, value);
+			game_variables->Mult<S>(var_id, value, args...);
 			break;
 		case 4:
-			game_variables->Div(var_id, value);
+			game_variables->Div<S>(var_id, value, args...);
 			break;
 		case 5:
-			game_variables->Mod(var_id, value);
+			game_variables->Mod<S>(var_id, value, args...);
 			break;
 		case 6:
-			game_variables->BitOr(var_id, value);
+			game_variables->BitOr<S>(var_id, value, args...);
 			break;
 		case 7:
-			game_variables->BitAnd(var_id, value);
+			game_variables->BitAnd<S>(var_id, value, args...);
 			break;
 		case 8:
-			game_variables->BitXor(var_id, value);
+			game_variables->BitXor<S>(var_id, value, args...);
 			break;
 		case 9:
-			game_variables->BitShiftLeft(var_id, value);
+			game_variables->BitShiftLeft<S>(var_id, value, args...);
 			break;
 		case 10:
-			game_variables->BitShiftRight(var_id, value);
+			game_variables->BitShiftRight<S>(var_id, value, args...);
 			break;
 	}
 }
 
-inline void ControlVariables::PerformVarRangeOp(int operation, int start, int end, int value) {
+template<DataScopeType S, typename... Args>
+inline void ControlVariables::PerformVarRangeOp(int operation, int start, int end, int value, Args... args) {
 	switch (operation) {
 		case 0:
-			game_variables->SetRange(start, end, value);
+			game_variables->SetRange<S>(start, end, value, args...);
 			break;
 		case 1:
-			game_variables->AddRange(start, end, value);
+			game_variables->AddRange<S>(start, end, value, args...);
 			break;
 		case 2:
-			game_variables->SubRange(start, end, value);
+			game_variables->SubRange<S>(start, end, value, args...);
 			break;
 		case 3:
-			game_variables->MultRange(start, end, value);
+			game_variables->MultRange<S>(start, end, value, args...);
 			break;
 		case 4:
-			game_variables->DivRange(start, end, value);
+			game_variables->DivRange<S>(start, end, value, args...);
 			break;
 		case 5:
-			game_variables->ModRange(start, end, value);
+			game_variables->ModRange<S>(start, end, value, args...);
 			break;
 		case 6:
-			game_variables->BitOrRange(start, end, value);
+			game_variables->BitOrRange<S>(start, end, value, args...);
 			break;
 		case 7:
-			game_variables->BitAndRange(start, end, value);
+			game_variables->BitAndRange<S>(start, end, value, args...);
 			break;
 		case 8:
-			game_variables->BitXorRange(start, end, value);
+			game_variables->BitXorRange<S>(start, end, value, args...);
 			break;
 		case 9:
-			game_variables->BitShiftLeftRange(start, end, value);
+			game_variables->BitShiftLeftRange<S>(start, end, value, args...);
 			break;
 		case 10:
-			game_variables->BitShiftRightRange(start, end, value);
+			game_variables->BitShiftRightRange<S>(start, end, value, args...);
 			break;
 	}
 }
 
-inline void ControlVariables::PerformVarRangeOpVariable(int operation, int start, int end, int var_id) {
+template<DataScopeType S, typename... Args>
+inline void ControlVariables::PerformVarRangeOpVariable(int operation, int start, int end, int var_id, Args... args) {
 	switch (operation) {
 		case 0:
-			game_variables->SetRangeVariable(start, end, var_id);
+			game_variables->SetRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 1:
-			game_variables->AddRangeVariable(start, end, var_id);
+			game_variables->AddRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 2:
-			game_variables->SubRangeVariable(start, end, var_id);
+			game_variables->SubRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 3:
-			game_variables->MultRangeVariable(start, end, var_id);
+			game_variables->MultRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 4:
-			game_variables->DivRangeVariable(start, end, var_id);
+			game_variables->DivRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 5:
-			game_variables->ModRangeVariable(start, end, var_id);
+			game_variables->ModRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 6:
-			game_variables->BitOrRangeVariable(start, end, var_id);
+			game_variables->BitOrRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 7:
-			game_variables->BitAndRangeVariable(start, end, var_id);
+			game_variables->BitAndRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 8:
-			game_variables->BitXorRangeVariable(start, end, var_id);
+			game_variables->BitXorRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 9:
-			game_variables->BitShiftLeftRangeVariable(start, end, var_id);
+			game_variables->BitShiftLeftRangeVariable<S>(start, end, var_id, args...);
 			break;
 		case 10:
-			game_variables->BitShiftRightRangeVariable(start, end, var_id);
+			game_variables->BitShiftRightRangeVariable<S>(start, end, var_id, args...);
 			break;
 	}
 }
 
-inline void ControlVariables::PerformVarRangeOpVariableIndirect(int operation, int start, int end, int var_id) {
+template<DataScopeType S, typename... Args>
+inline void ControlVariables::PerformVarRangeOpVariableIndirect(int operation, int start, int end, int var_id, Args... args) {
 	switch (operation) {
 		case 0:
-			game_variables->SetRangeVariableIndirect(start, end, var_id);
+			game_variables->SetRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 1:
-			game_variables->AddRangeVariableIndirect(start, end, var_id);
+			game_variables->AddRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 2:
-			game_variables->SubRangeVariableIndirect(start, end, var_id);
+			game_variables->SubRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 3:
-			game_variables->MultRangeVariableIndirect(start, end, var_id);
+			game_variables->MultRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 4:
-			game_variables->DivRangeVariableIndirect(start, end, var_id);
+			game_variables->DivRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 5:
-			game_variables->ModRangeVariableIndirect(start, end, var_id);
+			game_variables->ModRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 6:
-			game_variables->BitOrRangeVariableIndirect(start, end, var_id);
+			game_variables->BitOrRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 7:
-			game_variables->BitAndRangeVariableIndirect(start, end, var_id);
+			game_variables->BitAndRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 8:
-			game_variables->BitXorRangeVariableIndirect(start, end, var_id);
+			game_variables->BitXorRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 9:
-			game_variables->BitShiftLeftRangeVariableIndirect(start, end, var_id);
+			game_variables->BitShiftLeftRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 		case 10:
-			game_variables->BitShiftRightRangeVariableIndirect(start, end, var_id);
+			game_variables->BitShiftRightRangeVariableIndirect<S>(start, end, var_id, args...);
 			break;
 	}
 }
 
-inline void ControlVariables::PerformVarRangeOpRandom(int operation, int start, int end, int rmin, int rmax) {
+template<DataScopeType S, typename... Args>
+inline void ControlVariables::PerformVarRangeOpRandom(int operation, int start, int end, int rmin, int rmax, Args... args) {
 	switch (operation) {
 		case 0:
-			game_variables->SetRangeRandom(start, end, rmin, rmax);
+			game_variables->SetRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 1:
-			game_variables->AddRangeRandom(start, end, rmin, rmax);
+			game_variables->AddRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 2:
-			game_variables->SubRangeRandom(start, end, rmin, rmax);
+			game_variables->SubRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 3:
-			game_variables->MultRangeRandom(start, end, rmin, rmax);
+			game_variables->MultRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 4:
-			game_variables->DivRangeRandom(start, end, rmin, rmax);
+			game_variables->DivRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 5:
-			game_variables->ModRangeRandom(start, end, rmin, rmax);
+			game_variables->ModRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 6:
-			game_variables->BitOrRangeRandom(start, end, rmin, rmax);
+			game_variables->BitOrRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 7:
-			game_variables->BitAndRangeRandom(start, end, rmin, rmax);
+			game_variables->BitAndRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 8:
-			game_variables->BitXorRangeRandom(start, end, rmin, rmax);
+			game_variables->BitXorRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 9:
-			game_variables->BitShiftLeftRangeRandom(start, end, rmin, rmax);
+			game_variables->BitShiftLeftRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 		case 10:
-			game_variables->BitShiftRightRangeRandom(start, end, rmin, rmax);
+			game_variables->BitShiftRightRangeRandom<S>(start, end, rmin, rmax, args...);
 			break;
 	}
 }
@@ -1488,6 +1691,45 @@ namespace ConditionalBranching {
 	bool ManiacsExpression(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
 		return ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(6), interpreter);
 	}
+
+	inline bool FrameSwitch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		return ControlVariables::FrameSwitch<2>(com, interpreter) == (com.parameters[1] == 0);
+	}
+
+	inline bool MapScopeSwitch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		return ControlVariables::MapScopeSwitch<2>(com, interpreter) == (com.parameters[1] == 0);
+	}
+
+	inline bool MapEventScopeSwitch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		return ControlVariables::MapEventScopeSwitch<2>(com, interpreter) == (com.parameters[1] == 0);
+	}
+
+	inline bool FrameVariable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		int value1 = game_variables->Get(com.parameters[1]);
+		int op = com.parameters[2];
+		int value2 = ControlVariables::FrameVariable<3>(com, interpreter);
+		return Game_Interpreter_Shared::CheckOperator(value1, value2, op);
+	}
+
+	inline bool MapScopeVariable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		int value1 = game_variables->Get(com.parameters[1]);
+		int op = com.parameters[2];
+		int value2 = ControlVariables::MapScopeVariable<3>(com, interpreter);
+		return Game_Interpreter_Shared::CheckOperator(value1, value2, op);
+	}
+
+	inline bool MapEventScopeVariable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)
+	{
+		int value1 = game_variables->Get(com.parameters[1]);
+		int op = com.parameters[2];
+		int value2 = ControlVariables::MapEventScopeVariable<3>(com, interpreter);
+		return Game_Interpreter_Shared::CheckOperator(value1, value2, op);
+	}
 }
 
 EP_ALWAYS_INLINE bool ConditionalBranching::dispatch_table_condition::Execute(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) const {
@@ -1533,6 +1775,15 @@ ConditionalBranching::dispatch_table_condition& ConditionalBranching::BuildDispa
 		ops[eCondition_2k3_Other] = &Other;
 	}
 	// end Vanilla operands
+	if (includeEasyRpgEx) {
+		ops[eCondition_EasyRpg_FrameSwitch] = &FrameSwitch;
+		ops[eCondition_EasyRpg_ScopedSwitch_Map] = &MapScopeSwitch;
+		ops[eCondition_EasyRpg_ScopedSwitch_MapEvent] = &MapEventScopeSwitch;
+		ops[eCondition_EasyRpg_FrameVariable] = &FrameVariable;
+		ops[eCondition_EasyRpg_ScopedVariable_Map] = &MapScopeVariable;
+		ops[eCondition_EasyRpg_ScopedVariable_MapEvent] = &MapEventScopeVariable;
+	}
+
 
 	if (includeManiacs_200128) {
 		ops[eCondition_Maniacs_Other] = &ManiacsOther;

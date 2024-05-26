@@ -376,6 +376,29 @@ void Game_Map::SetupCommon() {
 			if (pg.condition.flags.variable) {
 				map_cache->AddEventAsRefreshTarget<Op::VarSet>(pg.condition.variable_id, ev);
 			}
+
+			if (Player::HasEasyRpgExtensions()) {
+#ifndef SCOPEDVARS_LIBLCF_STUB
+				if (pg.easyrpg_condition.flags.self_switch_a) {
+					map_cache->AddEventAsRefreshTarget<Op::SelfScopedSwitchSet>(pg.easyrpg_condition.self_switch_a_id, ev);
+				}
+				if (pg.easyrpg_condition.flags.self_switch_b) {
+					map_cache->AddEventAsRefreshTarget<Op::SelfScopedSwitchSet>(pg.easyrpg_condition.self_switch_b_id, ev);
+				}
+				if (pg.easyrpg_condition.flags.self_var) {
+					map_cache->AddEventAsRefreshTarget<Op::SelfScopedVarSet>(pg.easyrpg_condition.self_var_id, ev);
+				}
+				if (pg.easyrpg_condition.flags.map_switch_a) {
+					map_cache->AddEventAsRefreshTarget<Op::MapScopedSwitchSet>(pg.easyrpg_condition.map_switch_a_id, ev);
+				}
+				if (pg.easyrpg_condition.flags.map_switch_b) {
+					map_cache->AddEventAsRefreshTarget<Op::MapScopedSwitchSet>(pg.easyrpg_condition.map_switch_b_id, ev);
+				}
+				if (pg.easyrpg_condition.flags.map_var) {
+					map_cache->AddEventAsRefreshTarget<Op::MapScopedVarSet>(pg.easyrpg_condition.map_var_id, ev);
+				}
+#endif
+			}
 		}
 	}
 }
@@ -1573,6 +1596,34 @@ void Game_Map::SetNeedRefreshForVarChange(std::initializer_list<int> var_ids) {
 	for (auto var_id: var_ids) {
 		SetNeedRefreshForVarChange(var_id);
 	}
+}
+
+void Game_Map::SetNeedRefreshForScopedSwitchChange(int map_id, int switch_id) {
+	if (need_refresh || map_id != GetMapId())
+		return;
+	if (map_cache->GetNeedRefresh<Caching::ObservervedVarOps::MapScopedSwitchSet>(switch_id))
+		SetNeedRefresh(true);
+}
+
+void Game_Map::SetNeedRefreshForScopedVarChange(int map_id, int var_id) {
+	if (need_refresh || map_id != GetMapId())
+		return;
+	if (map_cache->GetNeedRefresh<Caching::ObservervedVarOps::MapScopedVarSet>(var_id))
+		SetNeedRefresh(true);
+}
+
+void Game_Map::SetNeedRefreshForSelfSwitchChange(int map_id, int evt_id, int switch_id) {
+	if (need_refresh || map_id != GetMapId())
+		return;
+	if (map_cache->GetNeedRefresh<Caching::ObservervedVarOps::SelfScopedSwitchSet>(switch_id))
+		SetNeedRefresh(true);
+}
+
+void Game_Map::SetNeedRefreshForSelfVarChange(int map_id, int evt_id, int var_id) {
+	if (need_refresh || map_id != GetMapId())
+		return;
+	if (map_cache->GetNeedRefresh<Caching::ObservervedVarOps::SelfScopedVarSet>(var_id))
+		SetNeedRefresh(true);
 }
 
 std::vector<unsigned char>& Game_Map::GetPassagesDown() {

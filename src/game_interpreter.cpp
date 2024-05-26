@@ -132,6 +132,12 @@ void Game_Interpreter::Push(
 	}
 
 	_state.stack.push_back(std::move(frame));
+
+#ifndef SCOPEDVARS_LIBLCF_STUB
+	if (_state.stack.size() > 1 && _state.stack[_state.stack.size() - 1].easyrpg_framevars_in_use) {
+		CarryOverFrameScopedVariables(false);
+	}
+#endif
 }
 
 
@@ -836,17 +842,79 @@ bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CommandManiacControlStrings(com);
 		case Cmd::Maniac_CallCommand:
 			return CommandManiacCallCommand(com);
+#ifdef SCOPEDVARS_LIBLCF_STUB
 		case static_cast<Cmd>(2020):
 			return CommandEasyRpgConditionalBranchEx(com);
 		case static_cast<Cmd>(2021):
 			return CommandEasyRpgControlSwitchesEx(com);
 		case static_cast<Cmd>(2022):
 			return CommandEasyRpgControlVariablesEx(com);
+		case static_cast<Cmd>(2023):
+			return CommandControlScopedSwitches(com);
+		case static_cast<Cmd>(2024):
+			return CommandControlScopedVariables(com);
+		case static_cast<Cmd>(2025):
+			return CommandControlScopedTypeOptions(com);
+#else
+		case Cmd::ConditionalBranchEx:
+			return CommandConditionalBranchEx(com);
+		case Cmd::ControlSwitchesEx:
+			return CommandControlSwitchesEx(com);
+		case Cmd::ControlVarsEx:
+			return CommandControlVariablesEx(com);
+		case Cmd::ControlScopedSwitches:
+			return CommandControlScopedSwitches(com);
+		case Cmd::ControlScopedVars:
+			return CommandControlScopedVariables(com);
+		case Cmd::ControlScopedTypeOptions:
+			return CommandControlScopedTypeOptions(com);
+#endif
 		case static_cast<Game_Interpreter::Cmd>(2053): //Cmd::EasyRpg_SetInterpreterFlag
 			return CommandEasyRpgSetInterpreterFlag(com);
 		default:
 			return true;
 	}
+}
+
+void Game_Interpreter::CarryOverFrameScopedVariables(bool is_pop) {
+	auto apply_carry_flags = [](std::vector<uint32_t>& flags, auto apply) {
+		for (int i = 0; i < flags.size(); i++) {
+			int mask = flags[i];
+			if (mask == 0)
+				continue;
+			for (int b = 0; b < 32; b++) {
+				if ((mask & (1 << b)) > 0) {
+					apply((i * 32) + 1 + b);
+				}
+			}
+		}
+	};
+
+	assert(_state.stack.size() > 1);
+
+#ifndef SCOPEDVARS_LIBLCF_STUB
+	if (is_pop) {
+		auto& frame_curr = _state.stack[_state.stack.size() - 1];
+		auto& frame_prev = _state.stack[_state.stack.size() - 2];
+
+		apply_carry_flags(frame_curr.easyrpg_frame_switches_carry_flags_out, [&frame_curr, &frame_prev](int id) {
+			frame_prev.easyrpg_frame_switches[i] = frame_curr.easyrpg_frame_switches[i];
+		});
+		apply_carry_flags(frame_curr.easyrpg_frame_variables_carry_flags_out, [&frame_curr, &frame_prev](int id) {
+			frame_prev.easyrpg_frame_variables[i] = frame_curr.easyrpg_frame_variables[i];
+		});
+	} else {
+		auto& frame_curr = _state.stack[_state.stack.size() - 2];
+		auto& frame_new = _state.stack[_state.stack.size() - 1];
+
+		apply_carry_flags(frame_curr.easyrpg_frame_switches_carry_flags_in, [&frame_curr, &frame_new](int id) {
+			frame_new.easyrpg_frame_switches[i] = frame_curr.easyrpg_frame_switches[i];
+		});
+		apply_carry_flags(frame_curr.easyrpg_frame_variables_carry_flags_in, [&frame_curr, &frame_new](int id) {
+			frame_new.easyrpg_frame_variables[i] = frame_curr.easyrpg_frame_variables[i];
+		});
+	}
+#endif
 }
 
 bool Game_Interpreter::OnFinishStackFrame() {
@@ -868,6 +936,12 @@ bool Game_Interpreter::OnFinishStackFrame() {
 			evnt->OnFinishForegroundEvent();
 		}
 	}
+
+#ifndef SCOPEDVARS_LIBLCF_STUB
+	if (!is_base_frame && frame.easyrpg_framevars_in_use) {
+		CarryOverFrameScopedVariables(true);
+	}
+#endif
 
 	if (!main_flag && is_base_frame) {
 		// Parallel events will never clear the base stack frame. Instead we just
@@ -1129,9 +1203,97 @@ bool Game_Interpreter::CommandEasyRpgControlSwitchesEx(lcf::rpg::EventCommand co
 	return true;
 }
 
+bool Game_Interpreter::CommandControlScopedSwitches(lcf::rpg::EventCommand const& com) { // 2023
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	int start, end;
+	bool target_eval_result = DecodeTargetEvaluationMode<
+		/* validate_patches */ false,
+		/* support_range_indirect */ true,
+		/* support_expressions */ true,
+		/* support_bitmask */ true,
+		/* support_scopes */ true,
+		/* support_named */ true
+	>(com, start, end);
+	if (!target_eval_result) {
+		Output::Warning("ControlScopedSwitches: Unsupported target evaluation mode {}", com.parameters[0]);
+		return true;
+	}
+	int operand = com.parameters[3];
+	DataScopeType scope = static_cast<DataScopeType>(com.parameters[4]);
+	int map_id = (scope == eDataScope_Map || scope == eDataScope_MapEvent) ? ValueOrVariableBitfield<false, true, true, true>(com.parameters[0], 1, com.parameters[5]) : -1;
+	int evt_id = (scope == eDataScope_MapEvent) ? ValueOrVariableBitfield<false, true, true, true>(com.parameters[0], 2, com.parameters[6]) : -1;
+
+	if (map_id == 0)
+		map_id = Game_Map::GetMapId();
+	if (evt_id == 0 || evt_id == Game_Character::CharThisEvent)
+		evt_id = GetThisEventId();
+
+	if (start == end) {
+		switch (scope) {
+			case eDataScope_Global:
+				ControlSwitches::PerformSwitchOp(operand, start);
+				Game_Map::SetNeedRefreshForSwitchChange(start);
+				break;
+			case eDataScope_Frame:
+				ControlSwitches::PerformSwitchOp<eDataScope_Frame>(operand, start, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPush:
+				ControlSwitches::PerformSwitchOp<eDataScope_Frame_CarryOnPush>(operand, start, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPop:
+				ControlSwitches::PerformSwitchOp<eDataScope_Frame_CarryOnPop>(operand, start, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnBoth:
+				ControlSwitches::PerformSwitchOp<eDataScope_Frame_CarryOnBoth>(operand, start, GetFramePtr());
+				break;
+			case eDataScope_Map:
+				assert(map_id > 0);
+				ControlSwitches::PerformSwitchOp<eDataScope_Map>(operand, start, map_id);
+				Game_Map::SetNeedRefreshForScopedSwitchChange(map_id, start);
+				break;
+			case eDataScope_MapEvent:
+				assert(map_id > 0 && evt_id > 0);
+				ControlSwitches::PerformSwitchOp<eDataScope_MapEvent>(operand, start, map_id, evt_id);
+				Game_Map::SetNeedRefreshForSelfSwitchChange(map_id, evt_id, start);
+				break;
+		}
+	} else {
+		switch (scope) {
+			case eDataScope_Global:
+				ControlSwitches::PerformSwitchRangeOp(operand, start, end);
+				break;
+			case eDataScope_Frame:
+				ControlSwitches::PerformSwitchRangeOp<eDataScope_Frame>(operand, start, end, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPush:
+				ControlSwitches::PerformSwitchRangeOp<eDataScope_Frame_CarryOnPush>(operand, start, end, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPop:
+				ControlSwitches::PerformSwitchRangeOp<eDataScope_Frame_CarryOnPop>(operand, start, end, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnBoth:
+				ControlSwitches::PerformSwitchRangeOp<eDataScope_Frame_CarryOnBoth>(operand, start, end, GetFramePtr());
+				break;
+			case eDataScope_Map:
+				assert(map_id > 0);
+				ControlSwitches::PerformSwitchRangeOp<eDataScope_Map>(operand, start, end, map_id);
+				break;
+			case eDataScope_MapEvent:
+				assert(map_id > 0 && evt_id > 0);
+				ControlSwitches::PerformSwitchRangeOp<eDataScope_MapEvent>(operand, start, end, map_id, evt_id);
+				break;
+		}
+		Game_Map::SetNeedRefresh(true);
+	}
+
+	return true;
+}
+
 bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com) { // code 10220
 
-	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
 	static const auto dispatch_table = ControlVariables::BuildDispatchTable<ControlVariables::eControlVarOp_Default>(Player::IsPatchManiac(), false, false);
 
 	int value = 0;
@@ -1233,6 +1395,191 @@ bool Game_Interpreter::CommandEasyRpgControlVariablesEx(lcf::rpg::EventCommand c
 	} else {
 		// Multiple variables - constant
 		ControlVariables::PerformVarRangeOp(operation, start, end, value);
+		Game_Map::SetNeedRefresh(true);
+	}
+
+	return true;
+}
+
+
+bool Game_Interpreter::CommandControlScopedVariables(lcf::rpg::EventCommand const& com) { // 2024
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	static const auto dispatch_table = ControlVariables::BuildDispatchTable<ControlVariables::eControlVarOp_Scoped>(true, false, true);
+
+	int value = 0;
+	if (!dispatch_table.Execute(value, com, *this))
+		return true;
+
+	int start, end;
+	bool target_eval_result = DecodeTargetEvaluationMode<
+		/* validate_patches */ false,
+		/* support_range_indirect */ true,
+		/* support_expressions */ true,
+		/* support_bitmask */ true,
+		/* support_scopes */ true,
+		/* support_named */ true
+	>(com, start, end);
+	if (!target_eval_result) {
+		Output::Warning("ControlScopedVariables: Unsupported target evaluation mode {}", com.parameters[0]);
+		return true;
+	}
+
+	int operation = com.parameters[3];
+	DataScopeType scope = static_cast<DataScopeType>(com.parameters[5]);
+	int map_id = (scope == eDataScope_Map || scope == eDataScope_MapEvent) ? ValueOrVariableBitfield<false, true, true, true>(com.parameters[0], 1, com.parameters[6]) : -1;
+	int evt_id = (scope == eDataScope_MapEvent) ? ValueOrVariableBitfield<false, true, true, true>(com.parameters[0], 2, com.parameters[7]) : -1;
+
+	if (map_id == 0)
+		map_id = Game_Map::GetMapId();
+	if (evt_id == 0 || evt_id == Game_Character::CharThisEvent)
+		evt_id = GetThisEventId();
+
+	if (start == end) {
+		// Single variable case - if this is random value, we already called the RNG earlier.
+		switch (scope) {
+			case eDataScope_Global:
+				ControlVariables::PerformVarOp(operation, start, value);
+				Game_Map::SetNeedRefreshForVarChange(start);
+				break;
+			case eDataScope_Frame:
+				ControlVariables::PerformVarOp<eDataScope_Frame>(operation, start, value, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPush:
+				ControlVariables::PerformVarOp<eDataScope_Frame_CarryOnPush>(operation, start, value, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPop:
+				ControlVariables::PerformVarOp<eDataScope_Frame_CarryOnPop>(operation, start, value, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnBoth:
+				ControlVariables::PerformVarOp<eDataScope_Frame_CarryOnBoth>(operation, start, value, GetFramePtr());
+				break;
+			case eDataScope_Map:
+				assert(map_id > 0);
+				ControlVariables::PerformVarOp<eDataScope_Map>(operation, start, value, map_id);
+				Game_Map::SetNeedRefreshForScopedVarChange(map_id, start);
+				break;
+			case eDataScope_MapEvent:
+				assert(map_id > 0 && evt_id > 0);
+				ControlVariables::PerformVarOp<eDataScope_MapEvent>(operation, start, value, map_id, evt_id);
+				Game_Map::SetNeedRefreshForSelfVarChange(map_id, evt_id, start);
+				break;
+		}
+	} else if (com.parameters[4] == 1) {
+		// Multiple variables - Direct variable lookup
+		switch (scope) {
+			case eDataScope_Global:
+				ControlVariables::PerformVarRangeOpVariable(operation, start, end, com.parameters[8]);
+				break;
+			case eDataScope_Frame:
+				ControlVariables::PerformVarRangeOpVariable<eDataScope_Frame>(operation, start, end, com.parameters[8], GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPush:
+				ControlVariables::PerformVarRangeOpVariable<eDataScope_Frame_CarryOnPush>(operation, start, end, com.parameters[8], GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPop:
+				ControlVariables::PerformVarRangeOpVariable<eDataScope_Frame_CarryOnPop>(operation, start, end, com.parameters[8], GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnBoth:
+				ControlVariables::PerformVarRangeOpVariable<eDataScope_Frame_CarryOnBoth>(operation, start, end, com.parameters[8], GetFramePtr());
+				break;
+			case eDataScope_Map:
+				assert(map_id > 0);
+				ControlVariables::PerformVarRangeOpVariable<eDataScope_Map>(operation, start, end, com.parameters[8], map_id);
+				break;
+			case eDataScope_MapEvent:
+				assert(map_id > 0 && evt_id > 0);
+				ControlVariables::PerformVarRangeOpVariable<eDataScope_MapEvent>(operation, start, end, com.parameters[8], map_id, evt_id);
+				break;
+		}
+		Game_Map::SetNeedRefresh(true);
+	} else if (com.parameters[4] == 2) {
+		// Multiple variables - Indirect variable lookup
+		switch (scope) {
+			case eDataScope_Global:
+				ControlVariables::PerformVarRangeOpVariableIndirect(operation, start, end, com.parameters[8]);
+				break;
+			case eDataScope_Frame:
+				ControlVariables::PerformVarRangeOpVariableIndirect<eDataScope_Frame>(operation, start, end, com.parameters[8], GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPush:
+				ControlVariables::PerformVarRangeOpVariableIndirect<eDataScope_Frame_CarryOnPush>(operation, start, end, com.parameters[8], GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPop:
+				ControlVariables::PerformVarRangeOpVariableIndirect<eDataScope_Frame_CarryOnPop>(operation, start, end, com.parameters[8], GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnBoth:
+				ControlVariables::PerformVarRangeOpVariableIndirect<eDataScope_Frame_CarryOnBoth>(operation, start, end, com.parameters[8], GetFramePtr());
+				break;
+			case eDataScope_Map:
+				assert(map_id > 0);
+				ControlVariables::PerformVarRangeOpVariableIndirect<eDataScope_Map>(operation, start, end, com.parameters[8], map_id);
+				break;
+			case eDataScope_MapEvent:
+				assert(map_id > 0 && evt_id > 0);
+				ControlVariables::PerformVarRangeOpVariableIndirect<eDataScope_MapEvent>(operation, start, end, com.parameters[8], map_id, evt_id);
+				break;
+		}
+		Game_Map::SetNeedRefresh(true);
+	} else if (com.parameters[4] == 3) {
+		// Multiple variables - random
+		int rmax = max(com.parameters[8], com.parameters[9]);
+		int rmin = min(com.parameters[8], com.parameters[9]);
+		switch (scope) {
+			case eDataScope_Global:
+				ControlVariables::PerformVarRangeOpRandom(operation, start, end, rmin, rmax);
+				break;
+			case eDataScope_Frame:
+				ControlVariables::PerformVarRangeOpRandom<eDataScope_Frame>(operation, start, end, rmin, rmax, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPush:
+				ControlVariables::PerformVarRangeOpRandom<eDataScope_Frame_CarryOnPush>(operation, start, end, rmin, rmax, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPop:
+				ControlVariables::PerformVarRangeOpRandom<eDataScope_Frame_CarryOnPop>(operation, start, end, rmin, rmax, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnBoth:
+				ControlVariables::PerformVarRangeOpRandom<eDataScope_Frame_CarryOnBoth>(operation, start, end, rmin, rmax, GetFramePtr());
+				break;
+			case eDataScope_Map:
+				assert(map_id > 0);
+				ControlVariables::PerformVarRangeOpRandom<eDataScope_Map>(operation, start, end, rmin, rmax, map_id);
+				break;
+			case eDataScope_MapEvent:
+				assert(map_id > 0 && evt_id > 0);
+				ControlVariables::PerformVarRangeOpRandom<eDataScope_MapEvent>(operation, start, end, rmin, rmax, map_id, evt_id);
+				break;
+		}
+		Game_Map::SetNeedRefresh(true);
+	} else {
+		// Multiple variables - constant
+		switch (scope) {
+			case eDataScope_Global:
+				ControlVariables::PerformVarRangeOp(operation, start, end, value);
+				break;
+			case eDataScope_Frame:
+				ControlVariables::PerformVarRangeOp<eDataScope_Frame>(operation, start, end, value, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPush:
+				ControlVariables::PerformVarRangeOp<eDataScope_Frame_CarryOnPush>(operation, start, end, value, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnPop:
+				ControlVariables::PerformVarRangeOp<eDataScope_Frame_CarryOnPop>(operation, start, end, value, GetFramePtr());
+				break;
+			case eDataScope_Frame_CarryOnBoth:
+				ControlVariables::PerformVarRangeOp<eDataScope_Frame_CarryOnBoth>(operation, start, end, value, GetFramePtr());
+				break;
+			case eDataScope_Map:
+				assert(map_id > 0);
+				ControlVariables::PerformVarRangeOp<eDataScope_Map>(operation, start, end, value, map_id);
+				break;
+			case eDataScope_MapEvent:
+				assert(map_id > 0 && evt_id > 0);
+				ControlVariables::PerformVarRangeOp<eDataScope_MapEvent>(operation, start, end, value, map_id, evt_id);
+				break;
+		}
 		Game_Map::SetNeedRefresh(true);
 	}
 
@@ -3144,7 +3491,6 @@ bool Game_Interpreter::CommandChangeMainMenuAccess(lcf::rpg::EventCommand const&
 
 bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& com) { // Code 12010
 
-	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
 	static const auto dispatch_table = ConditionalBranching::BuildDispatchTable<ConditionalBranching::eCondBranch_Default>(Player::IsRPG2k3Commands(), Player::IsPatchManiac(), false, false);
 
 	bool result = dispatch_table.Execute(com, *this);
@@ -3163,7 +3509,6 @@ bool Game_Interpreter::CommandEasyRpgConditionalBranchEx(lcf::rpg::EventCommand 
 	if (!Player::HasEasyRpgExtensions()) {
 		return true;
 	}
-	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
 	static const auto dispatch_table = ConditionalBranching::BuildDispatchTable<ConditionalBranching::eCondBranch_Ex>(true, true, false, true);
 
 	bool result = dispatch_table.Execute(com, *this);
@@ -4121,13 +4466,13 @@ bool Game_Interpreter::CommandManiacControlGlobalSave(lcf::rpg::EventCommand con
 			chunk.length = reader.ReadInt();
 			switch (chunk.ID) {
 				case 1: {
-					Game_Switches::Switches_t switches;
+					std::vector<game_bool> switches;
 					reader.Read(switches, chunk.length);
 					Main_Data::game_switches_global->SetData(std::move(switches));
 					break;
 				}
 				case 2: {
-					Game_Variables::Variables_t variables;
+					std::vector<int32_t> variables;
 					reader.Read(variables, chunk.length);
 					Main_Data::game_variables_global->SetData(std::move(variables));
 					break;
@@ -4557,6 +4902,70 @@ bool Game_Interpreter::CommandManiacCallCommand(lcf::rpg::EventCommand const& co
 	return true;
 }
 
+bool Game_Interpreter::CommandControlScopedTypeOptions(lcf::rpg::EventCommand const& com) { // 2025
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	int start, end;
+	bool target_eval_result = DecodeTargetEvaluationMode<
+		/* validate_patches */ false,
+		/* support_range_indirect */ true,
+		/* support_expressions */ true,
+		/* support_bitmask */ true,
+		/* support_scopes */ true,
+		/* support_named */ true
+	>(com, start, end);
+	if (!target_eval_result) {
+		Output::Warning("CommandControlScopedTypeOptions: Unsupported target evaluation mode {}", com.parameters[0]);
+		return true;
+	}
+
+	int data_type = com.parameters[3];
+	int operand = com.parameters[4];
+	int val = com.parameters[5];
+
+	DataScopeType scope = static_cast<DataScopeType>(com.parameters[6]);
+	int map_id = (scope == eDataScope_Map || scope == eDataScope_MapEvent) ? ValueOrVariableBitfield<false, true, true, true>(com.parameters[0], 1, com.parameters[7]) : -1;
+	int evt_id = (scope == eDataScope_MapEvent) ? ValueOrVariableBitfield<false, true, true, true>(com.parameters[0], 2, com.parameters[8]) : -1;
+
+	if (map_id == 0)
+		map_id = Game_Map::GetMapId();
+	if (evt_id == 0 || evt_id == Game_Character::CharThisEvent)
+		evt_id = GetThisEventId();
+
+	switch (operand) {
+		case 0: {
+			switch (scope) {
+				case eDataScope_Map:
+					assert(map_id > 0);
+
+					for (int id = start; id <= end; id++) {
+						if (data_type == VarStorage::eStorageType_Switch) {
+							Main_Data::game_switches->scoped_map.SetResetFlagForId(id, val > 0, map_id);
+						} else if (data_type == VarStorage::eStorageType_Variable) {
+							Main_Data::game_variables->scoped_map.SetResetFlagForId(id, val > 0, map_id);
+						}
+					}
+					break;
+				case eDataScope_MapEvent:
+					assert(map_id > 0 && evt_id > 0);
+
+					for (int id = start; id <= end; id++) {
+						if (data_type == VarStorage::eStorageType_Switch) {
+							Main_Data::game_switches->scoped_mapevent.SetResetFlagForId(id, val > 0, map_id, evt_id);
+						} else if (data_type == VarStorage::eStorageType_Variable) {
+							Main_Data::game_variables->scoped_mapevent.SetResetFlagForId(id, val > 0, map_id, evt_id);
+						}
+					}
+					break;
+			}
+		}
+	}
+
+	return true;
+}
+
 bool Game_Interpreter::CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand const& com) {
 	if (!Player::HasEasyRpgExtensions()) {
 		return true;
@@ -4583,6 +4992,7 @@ bool Game_Interpreter::CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand c
 	if (flag_name == "rpg2k-battle")
 		lcf::Data::system.easyrpg_use_rpg2k_battle_system = flag_value;
 
+	// TODO: test if this behaves correctly
 	ControlVariables::RebuildDispatchTables(Player::IsPatchManiac(), false, false);
 	ConditionalBranching::RebuildDispatchTables(Player::IsRPG2k3Commands(), Player::IsPatchManiac(), false, false);
 

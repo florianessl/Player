@@ -47,6 +47,11 @@ public:
 	void SetState(const lcf::rpg::SaveEventExecState& save);
 
 	/**
+	 * Called right before we change maps.
+	 */
+	void OnBeforeMapChange();
+
+	/**
 	 * Called when we change maps.
 	 */
 	void OnMapChange();

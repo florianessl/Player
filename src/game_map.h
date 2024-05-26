@@ -694,6 +694,10 @@ namespace Game_Map {
 		enum ObservervedVarOps {
 			SwitchSet = 0,
 			VarSet,
+			MapScopedSwitchSet,
+			MapScopedVarSet,
+			SelfScopedSwitchSet,
+			SelfScopedVarSet,
 
 			ObservervedVarOps_END
 		};
@@ -717,6 +721,10 @@ namespace Game_Map {
 	void SetNeedRefreshForSwitchChange(std::initializer_list<int> switch_ids);
 	void SetNeedRefreshForVarChange(std::initializer_list<int> var_ids);
 
+	void SetNeedRefreshForScopedSwitchChange(int map_id, int switch_id);
+	void SetNeedRefreshForScopedVarChange(int map_id, int var_id);
+	void SetNeedRefreshForSelfSwitchChange(int map_id, int evt_id, int switch_id);
+	void SetNeedRefreshForSelfVarChange(int map_id, int evt_id, int var_id);
 
 	namespace Parallax {
 		struct Params {

@@ -27,6 +27,7 @@
 #include "game_variables.h"
 #include "game_system.h"
 #include "game_interpreter_map.h"
+#include "game_interpreter_shared.h"
 #include "main_data.h"
 #include "player.h"
 #include "utils.h"
@@ -287,6 +288,47 @@ bool Game_Event::AreConditionsMet(const lcf::rpg::EventPage& page) {
 		int secs = Main_Data::game_party->GetTimerSeconds(Main_Data::game_party->Timer2);
 		if (secs > page.condition.timer2_sec)
 			return false;
+	}
+
+	if (Player::HasEasyRpgExtensions()) {
+#ifndef SCOPEDVARS_LIBLCF_STUB
+		// First SelfSwitch (A)
+		if (page.easyrpg_condition.flags.self_switch_a && !Main_Data::game_switches->Get<DataScopeType::eDataScope_MapEvent>(
+			page.easyrpg_condition.self_switch_a_id, GetMapId(), GetId())) {
+			return false;
+		}
+
+		// Second SelfSwitch (B)
+		if (page.easyrpg_condition.flags.self_switch_b && !Main_Data::game_switches->Get<DataScopeType::eDataScope_MapEvent>(
+			page.easyrpg_condition.self_switch_b_id, GetMapId(), GetId())) {
+			return false;
+		}
+
+		// SelfVar
+		if (page.easyrpg_condition.flags.self_var && page.easyrpg_condition.self_var_operator >= 0 && page.easyrpg_condition.self_var_operator <= 5) {
+			if (!Game_Interpreter_Shared::CheckOperator(
+				Main_Data::game_variables->Get<DataScopeType::eDataScope_MapEvent>(page.easyrpg_condition.self_var_id, GetMapId(), GetId()),
+				page.easyrpg_condition.self_var_value, page.easyrpg_condition.self_var_operator))
+				return false;
+		}
+
+		// First MapSwitch (A)
+		if (page.easyrpg_condition.flags.map_switch_a && !Game_Interpreter_Shared::EvaluateMapTreeSwitch(0, page.easyrpg_condition.map_switch_a_id, GetMapId())) {
+			return false;
+		}
+
+		// Second MapSwitch (B)
+		if (page.easyrpg_condition.flags.map_switch_b && !Game_Interpreter_Shared::EvaluateMapTreeSwitch(0, page.easyrpg_condition.map_switch_b_id, GetMapId())) {
+			return false;
+		}
+
+		// MapVar
+		if (page.easyrpg_condition.flags.map_var && page.easyrpg_condition.map_var_operator >= 0 && page.easyrpg_condition.map_var_operator <= 5) {
+			if (!Game_Interpreter_Shared::CheckOperator(Game_Interpreter_Shared::EvaluateMapTreeVariable(0, page.easyrpg_condition.map_var_id, GetMapId()),
+				page.easyrpg_condition.map_var_value, page.easyrpg_condition.map_var_operator))
+				return false;
+		}
+#endif
 	}
 
 	// All conditions met :D

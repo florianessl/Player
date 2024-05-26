@@ -24,486 +24,613 @@
 #include "rand.h"
 #include <cmath>
 
-constexpr int Game_Variables::max_warnings;
 constexpr Game_Variables::Var_t Game_Variables::min_2k;
 constexpr Game_Variables::Var_t Game_Variables::max_2k;
 constexpr Game_Variables::Var_t Game_Variables::min_2k3;
 constexpr Game_Variables::Var_t Game_Variables::max_2k3;
 
 namespace {
-using Var_t = Game_Variables::Var_t;
+	using Var_t = Game_Variables::Var_t;
 
-constexpr Var_t VarSet(Var_t o, Var_t n) {
-	(void)o;
-	return n;
-}
+	lcf::rpg::ScopedVariable* GetScopedVariable(DataScopeType scope, int id) {
+		switch (scope) {
+			case DataScopeType::eDataScope_Map:
+				return lcf::ReaderUtil::GetElement(lcf::Data::easyrpg_map_variables, id);
+			case DataScopeType::eDataScope_MapEvent:
+				return lcf::ReaderUtil::GetElement(lcf::Data::easyrpg_self_variables, id);
+		}
+		return nullptr;
+	}
 
-constexpr Var_t VarAdd(Var_t l, Var_t r) {
-	Var_t res = 0;
+	constexpr Var_t VarSet(Var_t o, Var_t n) {
+		(void)o;
+		return n;
+	}
+
+	constexpr Var_t VarAdd(Var_t l, Var_t r) {
+		Var_t res = 0;
 
 #ifdef _MSC_VER
-	res = l + r;
-	if (res < 0 && l > 0 && r > 0) {
-		return std::numeric_limits<Var_t>::max();
-	} else if (res > 0 && l < 0 && r < 0) {
-		return std::numeric_limits<Var_t>::min();
-	}
-#else
-	if (EP_UNLIKELY(__builtin_add_overflow(l, r, &res))) {
-		if (l >= 0 && r >= 0) {
+		res = l + r;
+		if (res < 0 && l > 0 && r > 0) {
 			return std::numeric_limits<Var_t>::max();
 		}
-		return std::numeric_limits<Var_t>::min();
-	}
-#endif
-
-	return res;
-}
-
-constexpr Var_t VarSub(Var_t l, Var_t r) {
-	Var_t res = 0;
-
-#ifdef _MSC_VER
-	res = l - r;
-	if (res < 0 && l > 0 && r < 0) {
-		return std::numeric_limits<Var_t>::max();
-	} else if (res > 0 && l < 0 && r > 0) {
-		return std::numeric_limits<Var_t>::min();
-	}
-#else
-	if (EP_UNLIKELY(__builtin_sub_overflow(l, r, &res))) {
-		if (r < 0) {
-			return std::numeric_limits<Var_t>::max();
-		}
-		return std::numeric_limits<Var_t>::min();
-	}
-#endif
-
-	return res;
-}
-
-constexpr Var_t VarMult(Var_t l, Var_t r) {
-	Var_t res = 0;
-
-#ifdef _MSC_VER
-	res = l * r;
-	if (l != 0 && res / l != r) {
-		if ((l > 0 && r > 0) || (l < 0 && r < 0)) {
-			return std::numeric_limits<Var_t>::max();
-		} else {
+		else if (res > 0 && l < 0 && r < 0) {
 			return std::numeric_limits<Var_t>::min();
 		}
-	}
 #else
-	if (EP_UNLIKELY(__builtin_mul_overflow(l, r, &res))) {
-		if ((l > 0 && r > 0) || (l < 0 && r < 0)) {
-			return std::numeric_limits<Var_t>::max();
+		if (EP_UNLIKELY(__builtin_add_overflow(l, r, &res))) {
+			if (l >= 0 && r >= 0) {
+				return std::numeric_limits<Var_t>::max();
+			}
+			return std::numeric_limits<Var_t>::min();
 		}
-		return std::numeric_limits<Var_t>::min();
-	}
 #endif
 
-	return res;
+		return res;
+	}
+
+	constexpr Var_t VarSub(Var_t l, Var_t r) {
+		Var_t res = 0;
+
+#ifdef _MSC_VER
+		res = l - r;
+		if (res < 0 && l > 0 && r < 0) {
+			return std::numeric_limits<Var_t>::max();
+		}
+		else if (res > 0 && l < 0 && r > 0) {
+			return std::numeric_limits<Var_t>::min();
+		}
+#else
+		if (EP_UNLIKELY(__builtin_sub_overflow(l, r, &res))) {
+			if (r < 0) {
+				return std::numeric_limits<Var_t>::max();
+			}
+			return std::numeric_limits<Var_t>::min();
+		}
+#endif
+
+		return res;
+	}
+
+	constexpr Var_t VarMult(Var_t l, Var_t r) {
+		Var_t res = 0;
+
+#ifdef _MSC_VER
+		res = l * r;
+		if (l != 0 && res / l != r) {
+			if ((l > 0 && r > 0) || (l < 0 && r < 0)) {
+				return std::numeric_limits<Var_t>::max();
+			}
+			else {
+				return std::numeric_limits<Var_t>::min();
+			}
+		}
+#else
+		if (EP_UNLIKELY(__builtin_mul_overflow(l, r, &res))) {
+			if ((l > 0 && r > 0) || (l < 0 && r < 0)) {
+				return std::numeric_limits<Var_t>::max();
+			}
+			return std::numeric_limits<Var_t>::min();
+		}
+#endif
+
+		return res;
+	}
+
+	constexpr Var_t VarDiv(Var_t n, Var_t d) {
+		return EP_LIKELY(d != 0) ? n / d : n;
+	};
+
+	constexpr Var_t VarMod(Var_t n, Var_t d) {
+		return EP_LIKELY(d != 0) ? n % d : 0;
+	};
+
+	constexpr Var_t VarBitOr(Var_t n, Var_t d) {
+		return n | d;
+	};
+
+	constexpr Var_t VarBitAnd(Var_t n, Var_t d) {
+		return n & d;
+	};
+
+	constexpr Var_t VarBitXor(Var_t n, Var_t d) {
+		return n ^ d;
+	};
+
+	constexpr Var_t VarBitShiftLeft(Var_t n, Var_t d) {
+		return n << d;
+	};
+
+	constexpr Var_t VarBitShiftRight(Var_t n, Var_t d) {
+		return n >> d;
+	};
+
 }
 
-constexpr Var_t VarDiv(Var_t n, Var_t d) {
-	return EP_LIKELY(d != 0) ? n / d : n;
-};
-
-constexpr Var_t VarMod(Var_t n, Var_t d) {
-	return EP_LIKELY(d != 0) ? n % d : 0;
-};
-
-constexpr Var_t VarBitOr(Var_t n, Var_t d) {
-	return n | d;
-};
-
-constexpr Var_t VarBitAnd(Var_t n, Var_t d) {
-	return n & d;
-};
-
-constexpr Var_t VarBitXor(Var_t n, Var_t d) {
-	return n ^ d;
-};
-
-constexpr Var_t VarBitShiftLeft(Var_t n, Var_t d) {
-	return n << d;
-};
-
-constexpr Var_t VarBitShiftRight(Var_t n, Var_t d) {
-	return n >> d;
-};
-
+Game_Variables::Game_Variables(Var_t minval, Var_t maxval) : Game_VariablesBase(minval, maxval) {
 }
 
-Game_Variables::Game_Variables(Var_t minval, Var_t maxval)
-	: _min(minval), _max(maxval)
-{
-	if (minval >= maxval) {
-		Output::Error("Variables: Invalid var range: [{}, {}]", minval, maxval);
+StringView Game_Variables::GetName(int id, DataScopeType scope) const {
+
+	if (DynamicScope::IsGlobalScope(scope) || DynamicScope::IsFrameScope(scope)) {
+		const lcf::rpg::Variable* var;
+
+		switch (scope) {
+		case DataScopeType::eDataScope_Global:
+			var = lcf::ReaderUtil::GetElement(lcf::Data::variables, id);
+			break;
+		case DataScopeType::eDataScope_Frame:
+		case DataScopeType::eDataScope_Frame_CarryOnPush:
+		case DataScopeType::eDataScope_Frame_CarryOnPop:
+		case DataScopeType::eDataScope_Frame_CarryOnBoth:
+			var = lcf::ReaderUtil::GetElement(lcf::Data::easyrpg_frame_variables, id);
+			break;
+		}
+
+		if (!var) {
+			// No warning, is valid because the variable array resizes dynamic during runtime
+			return {};
+		} else {
+			return var->name;
+		}
+	} else {
+		const lcf::rpg::ScopedVariable* sv = GetScopedVariable(scope, id);
+		if (sv != nullptr)
+			return sv->name;
+		return "";
 	}
 }
 
-void Game_Variables::WarnGet(int variable_id) const {
-	Output::Debug("Invalid read var[{}]!", variable_id);
-	--_warnings;
-}
+uint8_t Game_Variables::scopedInitFlags(DataScopeType scope, int id) const {
+	assert(DynamicScope::IsMapScope(scope) || DynamicScope::IsMapEventScope(scope));
 
-template <typename F>
-Game_Variables::Var_t Game_Variables::SetOp(int variable_id, Var_t value, F&& op, const char* warn) {
-	if (EP_UNLIKELY(ShouldWarn(variable_id, variable_id))) {
-		Output::Debug(warn, variable_id, value);
-		--_warnings;
+	const lcf::rpg::ScopedVariable* sv = GetScopedVariable(scope, id);
+
+	uint32_t flags = 0;
+	if (sv != nullptr) {
+		if (sv->is_readonly)
+			flags = flags | ScopedDataStorage_t::eFlag_ReadOnly;
+		if (sv->auto_reset)
+			flags = flags | ScopedDataStorage_t::eFlag_AutoReset;
+		if (sv->default_value_defined)
+			flags = flags | ScopedDataStorage_t::eFlag_DefaultValueDefined;
+		if (DynamicScope::IsMapScope(scope) && sv->map_group_inherited_value)
+			flags = flags | ScopedDataStorage_t::eFlag_MapGrpInheritedValue;
 	}
-	if (variable_id <= 0) {
-		return 0;
-	}
-	if (EP_UNLIKELY(variable_id > static_cast<int>(_variables.size()))) {
-		_variables.resize(variable_id, 0);
-	}
-	auto& v = _variables[variable_id - 1];
-	value = op(v, value);
-	v = Utils::Clamp(value, _min, _max);
-	return v;
+
+	return flags;
 }
 
-template <typename... Args>
-void Game_Variables::PrepareRange(const int first_id, const int last_id, const char* warn, Args... args) {
-	if (EP_UNLIKELY(ShouldWarn(first_id, last_id))) {
-		Output::Debug(warn, first_id, last_id, args...);
-		--_warnings;
-	}
-	auto& vv = _variables;
-	if (EP_UNLIKELY(last_id > static_cast<int>(vv.size()))) {
-		vv.resize(last_id, 0);
-	}
+Game_Variables::Var_t Game_Variables::scopedGetDefaultValue(DataScopeType scope, int id) const {
+	assert(DynamicScope::IsVariableScope(scope));
+
+	const lcf::rpg::ScopedVariable* sv = GetScopedVariable(scope, id);
+	return sv != nullptr && sv->default_value_defined ? sv->default_value : false;
 }
 
-template <typename... Args>
-void Game_Variables::PrepareArray(const int first_id_a, const int last_id_a, const int first_id_b, const char* warn, Args... args) {
-	const int last_id_b = first_id_b + last_id_a - first_id_a;
-	if (EP_UNLIKELY(ShouldWarn(first_id_a, last_id_a) || ShouldWarn(first_id_b, last_id_b))) {
-		Output::Debug(warn, first_id_a, last_id_a, first_id_b, last_id_b, args...);
-		--_warnings;
-	}
-	auto& vv = _variables;
-	if (EP_UNLIKELY(last_id_a > static_cast<int>(vv.size()))) {
-		vv.resize(last_id_a, 0);
-	}
-	if (EP_UNLIKELY(last_id_b > static_cast<int>(vv.size()))) {
-		vv.resize(last_id_b, 0);
-	}
+void Game_Variables::scopedGetDataFromSaveElement(lcf::rpg::SaveScopedVariableData element, DataScopeType& scope, int& id, Var_t& value, int& map_id, int& event_id, bool& reset_flag) const {
+	scope = static_cast<DataScopeType>(element.scope);
+	id = element.id;
+	value = element.value;
+	map_id = element.map_id;
+	event_id = element.event_id;
+	reset_flag = element.auto_reset;
 }
 
-template <typename V, typename F>
-void Game_Variables::WriteRange(const int first_id, const int last_id, V&& value, F&& op) {
-	auto& vv = _variables;
-	for (int i = std::max(0, first_id - 1); i < last_id; ++i) {
-		auto& v = vv[i];
-		v = Utils::Clamp(op(v, value()), _min, _max);
-	}
+lcf::rpg::SaveScopedVariableData Game_Variables::scopedCreateSaveElement(DataScopeType scope, int id, Var_t value, int map_id, int event_id, bool reset_flag) const {
+	lcf::rpg::SaveScopedVariableData result = lcf::rpg::SaveScopedVariableData();
+	result.scope = static_cast<int>(scope);
+	result.id = id;
+	result.value = value;
+	result.map_id = map_id;
+	result.event_id = event_id;
+	result.auto_reset = reset_flag;
+	return result;
 }
 
-template <typename F>
-void Game_Variables::WriteArray(const int first_id_a, const int last_id_a, const int first_id_b, F&& op) {
-	auto& vv = _variables;
-	int out_b = std::max(0, first_id_b - 1);
-	for (int i = std::max(0, first_id_a - 1); i < last_id_a; ++i) {
-		auto& v_a = vv[i];
-		auto v_b = vv[out_b++];
-		v_a = Utils::Clamp(op(v_a, v_b), _min, _max);
-	}
+const typename Game_VariablesBase::FrameStorage_t Game_VariablesBase::GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const {
+#ifndef SCOPEDVARS_LIBLCF_STUB
+	return return std::tie(frame->easyrpg_frame_variables, frame->easyrpg_frame_variables_carry_flags_in, frame->easyrpg_frame_variables_carry_flags_out);
+#else
+	static std::vector<int32_t> vec;
+	static std::vector<uint32_t> carry_flags_in, carry_flags_out;
+	return std::tie(vec, carry_flags_in, carry_flags_out);
+#endif
 }
 
-Game_Variables::Var_t Game_Variables::Set(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarSet, "Invalid write var[{}] = {}!");
+typename Game_VariablesBase::FrameStorage_t Game_VariablesBase::GetFrameStorageForEditImpl(lcf::rpg::SaveEventExecFrame* frame) {
+#ifndef SCOPEDVARS_LIBLCF_STUB
+	return return std::tie(frame->easyrpg_frame_variables, frame->easyrpg_frame_variables_carry_flags_in, frame->easyrpg_frame_variables_carry_flags_out);
+#else
+	static std::vector<int32_t> vec;
+	static std::vector<uint32_t> carry_flags_in, carry_flags_out;
+	return std::tie(vec, carry_flags_in, carry_flags_out);
+#endif
 }
 
-Game_Variables::Var_t Game_Variables::Add(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarAdd, "Invalid write var[{}] += {}!");
-}
-
-Game_Variables::Var_t Game_Variables::Sub(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarSub, "Invalid write var[{}] -= {}!");
-}
-
-Game_Variables::Var_t Game_Variables::Mult(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarMult, "Invalid write var[{}] *= {}!");
-}
-
-Game_Variables::Var_t Game_Variables::Div(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarDiv, "Invalid write var[{}] /= {}!");
-}
-
-Game_Variables::Var_t Game_Variables::Mod(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarMod, "Invalid write var[{}] %= {}!");
-}
-
-Game_Variables::Var_t Game_Variables::BitOr(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarBitOr, "Invalid write var[{}] |= {}!");
-}
-
-Game_Variables::Var_t Game_Variables::BitAnd(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarBitAnd, "Invalid write var[{}] &= {}!");
-}
-
-Game_Variables::Var_t Game_Variables::BitXor(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarBitXor, "Invalid write var[{}] ^= {}!");
-}
-
-Game_Variables::Var_t Game_Variables::BitShiftLeft(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarBitShiftLeft, "Invalid write var[{}] <<= {}!");
-}
-
-Game_Variables::Var_t Game_Variables::BitShiftRight(int variable_id, Var_t value) {
-	return SetOp(variable_id, value, VarBitShiftRight, "Invalid write var[{}] >>= {}!");
-}
-
-void Game_Variables::SetRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] = {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarSet);
-}
-
-void Game_Variables::AddRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] += {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarAdd);
-}
-
-void Game_Variables::SubRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] -= {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarSub);
-}
-
-void Game_Variables::MultRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] *= {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarMult);
-}
-
-void Game_Variables::DivRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] /= {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarDiv);
-}
-
-void Game_Variables::ModRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] %= {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarMod);
-}
-
-void Game_Variables::BitOrRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] |= {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarBitOr);
-}
-
-void Game_Variables::BitAndRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] &= {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarBitAnd);
-}
-
-void Game_Variables::BitXorRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] ^= {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarBitXor);
-}
-
-void Game_Variables::BitShiftLeftRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] <<= {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarBitShiftLeft);
-}
-
-void Game_Variables::BitShiftRightRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] >>= {}!", value);
-	WriteRange(first_id, last_id, [value](){ return value; }, VarBitShiftRight);
-}
-
-template <typename F>
-void Game_Variables::WriteRangeVariable(int first_id, const int last_id, const int var_id, F&& op) {
+template <DataScopeType S, typename F, typename... Args>
+void Game_Variables::WriteRangeVariable(int first_id, const int last_id, const int var_id, F&& op, Args... args) {
 	if (var_id >= first_id && var_id <= last_id) {
-		auto value = Get(var_id);
-		WriteRange(first_id, var_id, [value](){ return value; }, std::forward<F>(op));
+		auto value = Get<S>(var_id, args...);
+		PerformRangeOperation<S>(first_id, var_id, value, std::forward<F>(op), args...);
 		first_id = var_id + 1;
 	}
-	auto value = Get(var_id);
-	WriteRange(first_id, last_id, [value](){ return value; }, std::forward<F>(op));
+	auto value = Get<S>(var_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, std::forward<F>(op), args...);
 }
 
-
-void Game_Variables::SetRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] = Var({})!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarSet);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::Add(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarAdd, "+=", args...);
 }
 
-void Game_Variables::AddRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] += var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarAdd);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::Sub(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarSub, "-=", args...);
 }
 
-void Game_Variables::SubRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] -= var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarSub);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::Mult(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarMult, "*=", args...);
 }
 
-void Game_Variables::MultRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] *= var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarMult);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::Div(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarDiv, "/=", args...);
 }
 
-void Game_Variables::DivRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] /= var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarDiv);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::Mod(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarMod, "%=", args...);
 }
 
-void Game_Variables::ModRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] /= var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarMod);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::BitOr(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarBitOr, "|=", args...);
 }
 
-void Game_Variables::BitOrRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] |= var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarBitOr);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::BitAnd(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarBitAnd, "&=", args...);
 }
 
-void Game_Variables::BitAndRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] &= var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarBitAnd);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::BitXor(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarBitXor, "^=", args...);
 }
 
-void Game_Variables::BitXorRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] ^= var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarBitXor);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::BitShiftLeft(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarBitShiftLeft, "<<=", args...);
 }
 
-void Game_Variables::BitShiftLeftRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] <<= var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarBitShiftLeft);
+SCOPED_IMPL
+Game_Variables::Var_t Game_Variables::BitShiftRight(int variable_id, Var_t value, Args... args) {
+	return PerformOperation<S>(variable_id, value, VarBitShiftRight, ">>=", args...);
 }
 
-void Game_Variables::BitShiftRightRangeVariable(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] >>= var[{}]!", var_id);
-	WriteRangeVariable(first_id, last_id, var_id, VarBitShiftRight);
-}
+SCOPED_IMPL
+inline void Game_Variables::AddRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, "+=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarAdd, args...);
+};
 
-void Game_Variables::SetRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] = var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarSet);
-}
+SCOPED_IMPL
+inline void Game_Variables::SubRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, "-=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarSub, args...);
+};
 
-void Game_Variables::AddRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] += var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarAdd);
-}
+SCOPED_IMPL
+inline void Game_Variables::MultRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, "*=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarMult, args...);
+};
 
-void Game_Variables::SubRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] -= var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarSub);
-}
+SCOPED_IMPL
+inline void Game_Variables::DivRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, "/=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarDiv, args...);
+};
 
-void Game_Variables::MultRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] *= var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarMult);
-}
+SCOPED_IMPL
+inline void Game_Variables::ModRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, "%=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarMod, args...);
+};
 
-void Game_Variables::DivRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] /= var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarDiv);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitOrRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, "|=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarBitOr, args...);
+};
 
-void Game_Variables::ModRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] %= var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarMod);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitAndRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, "&=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarBitAnd, args...);
+};
 
-void Game_Variables::BitOrRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] |= var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarBitOr);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitXorRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, "^=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarBitXor, args...);
+};
 
-void Game_Variables::BitAndRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] &= var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarBitAnd);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitShiftLeftRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, "<<=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarBitShiftLeft, args...);
+};
 
-void Game_Variables::BitXorRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] ^= var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarBitXor);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitShiftRightRange(int first_id, int last_id, Var_t value, Args... args) {
+	ValidateRangeOp<S>(first_id, last_id, value, ">>=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, value, VarBitShiftRight, args...);
+};
 
-void Game_Variables::BitShiftLeftRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] <<= var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarBitShiftLeft);
-}
+SCOPED_IMPL
+inline void Game_Variables::SetRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarSet, args...);
+};
 
-void Game_Variables::BitShiftRightRangeVariableIndirect(int first_id, int last_id, int var_id) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] >>= var[var[{}]]!", var_id);
-	WriteRange(first_id, last_id, [this,var_id](){ return Get(Get(var_id)); }, VarBitShiftRight);
-}
+SCOPED_IMPL
+inline void Game_Variables::AddRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "+=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarAdd, args...);
+};
 
-void Game_Variables::SetRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] = rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarSet);
-}
+SCOPED_IMPL
+inline void Game_Variables::SubRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "-=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarSub, args...);
+};
 
-void Game_Variables::AddRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] += rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarAdd);
-}
+SCOPED_IMPL
+inline void Game_Variables::MultRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "*=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarMult, args...);
+};
 
-void Game_Variables::SubRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] -= rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarSub);
-}
+SCOPED_IMPL
+inline void Game_Variables::DivRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "/=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarDiv, args...);
+};
 
-void Game_Variables::MultRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] *= rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarMult);
-}
+SCOPED_IMPL
+inline void Game_Variables::ModRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "%=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarMod, args...);
+};
 
-void Game_Variables::DivRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] /= rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarDiv);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitOrRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "|=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarBitOr, args...);
+};
 
-void Game_Variables::ModRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] %= rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarMod);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitAndRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "&=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarBitAnd, args...);
+};
 
-void Game_Variables::BitOrRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] |= rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarBitOr);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitXorRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "^=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarBitXor, args...);
+};
 
-void Game_Variables::BitAndRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] &= rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarBitAnd);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitShiftLeftRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, "<<=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarBitShiftLeft, args...);
+};
 
-void Game_Variables::BitXorRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] ^= rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarBitXor);
-}
+SCOPED_IMPL
+inline void Game_Variables::BitShiftRightRangeVariable(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarOp<S>(first_id, last_id, var_id, ">>=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	WriteRangeVariable<S>(first_id, last_id, var_id, VarBitShiftRight, args...);
+};
 
-void Game_Variables::BitShiftLeftRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] <<= rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarBitShiftLeft);
-}
+SCOPED_IMPL
+void Game_Variables::SetRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarSet, args...);
+};
 
-void Game_Variables::BitShiftRightRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval) {
-	PrepareRange(first_id, last_id, "Invalid write var[{},{}] >>= rand({},{})!", minval, maxval);
-	WriteRange(first_id, last_id, [minval,maxval](){ return Rand::GetRandomNumber(minval, maxval); }, VarBitShiftRight);
-}
+SCOPED_IMPL
+void Game_Variables::AddRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "+=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarAdd, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::SubRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "-=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarSub, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::MultRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "*=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarMult, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::DivRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "/=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarDiv, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::ModRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "%=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarMod, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitOrRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "|=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarBitOr, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitAndRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "&=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarBitAnd, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitXorRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "^=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarBitXor, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitShiftLeftRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, "<<=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarBitShiftLeft, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitShiftRightRangeVariableIndirect(int first_id, int last_id, int var_id, Args... args) {
+	ValidateRangeVarIndirectOp<S>(first_id, last_id, var_id, ">>=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [this, var_id]() { return Get(Get(var_id)); }, VarBitShiftRight, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::SetRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarSet, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::AddRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "+=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarAdd, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::SubRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "-=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarSub, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::MultRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "*=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarMult, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::DivRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "/=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarDiv, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::ModRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "%=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarMod, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitOrRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "|=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarBitOr, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitAndRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "&=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarBitAnd, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitXorRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "^=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarBitXor, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitShiftLeftRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, "<<=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarBitShiftLeft, args...);
+};
+
+SCOPED_IMPL
+void Game_Variables::BitShiftRightRangeRandom(int first_id, int last_id, Var_t minval, Var_t maxval, Args... args) {
+	ValidateRangeRandomOp<S>(first_id, last_id, minval, maxval, ">>=", args...);
+	PrepareRange<S>(first_id, last_id, args...);
+	PerformRangeOperation<S>(first_id, last_id, [minval, maxval]() { return Rand::GetRandomNumber(minval, maxval); }, VarBitShiftRight, args...);
+};
 
 void Game_Variables::EnumerateRange(int first_id, int last_id, Var_t value) {
-	PrepareRange(first_id, last_id, "Invalid write enumerate(var[{},{}])!");
+	if (EP_UNLIKELY(ShouldWarn<DataScopeType::eDataScope_Global>(first_id, last_id))) {
+		Output::Debug("Invalid write enumerate(var[{},{}])!", first_id, last_id);
+		--_warnings;
+	}
+	PrepareRange(first_id, last_id);
 	Var_t out_value = value;
-	WriteRange(first_id, last_id, [&out_value](){ return out_value++; }, VarSet);
+	PerformRangeOperation(first_id, last_id, [&out_value]() { return out_value++; }, VarSet);
 }
 
 void Game_Variables::SortRange(int first_id, int last_id, bool asc) {
-	PrepareRange(first_id, last_id, "Invalid write sort(var[{},{}])!");
-	auto& vv = _variables;
+	if (EP_UNLIKELY(ShouldWarn<DataScopeType::eDataScope_Global>(first_id, last_id))) {
+		Output::Debug("Invalid write sort(var[{},{}])!", first_id, last_id);
+		--_warnings;
+	}
+	auto& vv = GetStorageForEdit();
 	int i = std::max(0, first_id - 1);
 	if (i < last_id) {
 		auto sorter = [&](auto&& fn) {
-			std::stable_sort(vv.begin() + i, vv.begin() + last_id, fn);
+			std::stable_sort(vv.vector_ref().begin() + i, vv.vector_ref().begin() + last_id, fn);
 		};
 		if (asc) {
 			sorter(std::less<>());
@@ -514,11 +641,25 @@ void Game_Variables::SortRange(int first_id, int last_id, bool asc) {
 }
 
 void Game_Variables::ShuffleRange(int first_id, int last_id) {
-	PrepareRange(first_id, last_id, "Invalid write shuffle(var[{},{}])!");
-	auto& vv = _variables;
+	if (EP_UNLIKELY(ShouldWarn<DataScopeType::eDataScope_Global>(first_id, last_id))) {
+		Output::Debug("Invalid write shuffle(var[{},{}])!", first_id, last_id);
+		--_warnings;
+	}
+	auto& vv = GetStorageForEdit();
 	for (int i = std::max(0, first_id - 1); i < last_id; ++i) {
 		int rnd_num = Rand::GetRandomNumber(first_id, last_id) - 1;
-		std::swap(vv[i], vv[rnd_num]);
+		std::swap(vv.vector_ref()[i], vv.vector_ref()[rnd_num]);
+	}
+}
+
+template <typename F>
+void Game_Variables::WriteArray(const int first_id_a, const int last_id_a, const int first_id_b, F&& op) {
+	auto& vv = GetStorageForEdit();
+	int out_b = std::max(0, first_id_b - 1);
+	for (int i = std::max(0, first_id_a - 1); i < last_id_a; ++i) {
+		auto& v_a = vv.vector_ref()[i];
+		auto v_b = vv.vector_ref()[out_b++];
+		v_a = Utils::Clamp(op(v_a, v_b), GetMinValue(), GetMaxValue());
 	}
 }
 
@@ -529,16 +670,28 @@ void Game_Variables::SetArray(int first_id_a, int last_id_a, int first_id_b) {
 	if (first_id_a < first_id_b) {
 		WriteArray(first_id_a, last_id_a, first_id_b, VarSet);
 	} else {
-		auto& vv = _variables;
+		auto& vv = GetStorageForEdit();
 		const int steps = std::max(0, last_id_a - first_id_a + 1);
 		int out_b = std::max(0, first_id_b + steps - 2);
 		int out_a = std::max(0, last_id_a - 1);
 		for (int i = 0; i < steps; ++i) {
-			auto& v_a = vv[out_a--];
-			auto v_b = vv[out_b--];
-			v_a = Utils::Clamp(VarSet(v_a, v_b), _min, _max);
+			auto& v_a = vv.vector_ref()[out_a--];
+			auto v_b = vv.vector_ref()[out_b--];
+			v_a = Utils::Clamp(VarSet(v_a, v_b), GetMinValue(), GetMaxValue());
 		}
 	}
+}
+
+template <typename... Args>
+void Game_Variables::PrepareArray(const int first_id_a, const int last_id_a, const int first_id_b, const char* warn, Args... args) {
+	const int last_id_b = first_id_b + last_id_a - first_id_a;
+	if (EP_UNLIKELY(ShouldWarn<DataScopeType::eDataScope_Global>(first_id_a, last_id_a) || ShouldWarn<DataScopeType::eDataScope_Global>(first_id_b, last_id_b))) {
+		Output::Debug(warn, first_id_a, last_id_a, first_id_b, last_id_b, args...);
+		--_warnings;
+	}
+	auto& vv = GetStorageForEdit();
+	vv.prepare(first_id_a, last_id_a);
+	vv.prepare(first_id_b, last_id_b);
 }
 
 void Game_Variables::AddArray(int first_id_a, int last_id_a, int first_id_b) {
@@ -593,27 +746,128 @@ void Game_Variables::BitShiftRightArray(int first_id_a, int last_id_a, int first
 
 void Game_Variables::SwapArray(int first_id_a, int last_id_a, int first_id_b) {
 	PrepareArray(first_id_a, last_id_a, first_id_b, "Invalid write var[{},{}] <-> var[{},{}]!");
-	auto& vv = _variables;
+	auto& vv = GetStorageForEdit();
 	const int steps = std::max(0, last_id_a - first_id_a + 1);
 	int out_b = std::max(0, first_id_b + steps - 2);
 	int out_a = std::max(0, last_id_a - 1);
 	for (int i = 0; i < steps; ++i) {
-		std::swap(vv[out_a--], vv[out_b--]);
+		std::swap(vv.vector_ref()[out_a--], vv.vector_ref()[out_b--]);
 	}
 }
 
-StringView Game_Variables::GetName(int _id) const {
-	const auto* var = lcf::ReaderUtil::GetElement(lcf::Data::variables, _id);
-
-	if (!var) {
-		// No warning, is valid because the variable array resizes dynamic during runtime
-		return {};
-	} else {
-		return var->name;
-	}
-}
 
 int Game_Variables::GetMaxDigits() const {
-	auto val = std::max(std::llabs(_max), std::llabs(_min));
+	auto val = std::max(std::llabs(GetMaxValue()), std::llabs(GetMinValue()));
 	return static_cast<int>(std::log10(val) + 1);
 }
+
+
+
+#define EXPLICIT_INSTANCES_OP(N) \
+template Game_Variables::Var_t Game_Variables::N<DataScopeType::eDataScope_Global>(int variable_id, Var_t value); \
+template Game_Variables::Var_t Game_Variables::N<DataScopeType::eDataScope_Frame>(int variable_id, Var_t value, lcf::rpg::SaveEventExecFrame*); \
+template Game_Variables::Var_t Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPush>(int variable_id, Var_t value, lcf::rpg::SaveEventExecFrame*); \
+template Game_Variables::Var_t Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPop>(int variable_id, Var_t value, lcf::rpg::SaveEventExecFrame*); \
+template Game_Variables::Var_t Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnBoth>(int variable_id, Var_t value, lcf::rpg::SaveEventExecFrame*); \
+template Game_Variables::Var_t Game_Variables::N<DataScopeType::eDataScope_Map>(int variable_id, Var_t value, int map_id); \
+template Game_Variables::Var_t Game_Variables::N<DataScopeType::eDataScope_MapEvent>(int variable_id, Var_t value, int map_id, int event_id);
+
+#define EXPLICIT_INSTANCES_RANGE_OP(N) \
+template void Game_Variables::N<DataScopeType::eDataScope_Global>(int first_id, int last_id, Var_t value); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame>(int first_id, int last_id, Var_t value, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPush>(int first_id, int last_id, Var_t value, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPop>(int first_id, int last_id, Var_t value, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnBoth>(int first_id, int last_id, Var_t value, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Map>(int first_id, int last_id, Var_t value, int map_id); \
+template void Game_Variables::N<DataScopeType::eDataScope_MapEvent>(int first_id, int last_id, Var_t value, int map_id, int event_id);
+
+#define EXPLICIT_INSTANCES_RANGEVAR_OP(N) \
+template void Game_Variables::N<DataScopeType::eDataScope_Global>(int first_id, int last_id, int var_id); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame>(int first_id, int last_id, int var_id, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPush>(int first_id, int last_id, int var_id, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPop>(int first_id, int last_id, int var_id, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnBoth>(int first_id, int last_id, int var_id, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Map>(int first_id, int last_id, int var_id, int map_id); \
+template void Game_Variables::N<DataScopeType::eDataScope_MapEvent>(int first_id, int last_id, int var_id, int map_id, int event_id);
+
+#define EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(N) \
+template void Game_Variables::N<DataScopeType::eDataScope_Global>(int first_id, int last_id, int var_id); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame>(int first_id, int last_id, int var_id, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPush>(int first_id, int last_id, int var_id, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPop>(int first_id, int last_id, int var_id, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnBoth>(int first_id, int last_id, int var_id, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Map>(int first_id, int last_id, int var_id, int map_id); \
+template void Game_Variables::N<DataScopeType::eDataScope_MapEvent>(int first_id, int last_id, int var_id, int map_id, int event_id);
+
+#define EXPLICIT_INSTANCES_RANGE_RANDOM_OP(N) \
+template void Game_Variables::N<DataScopeType::eDataScope_Global>(int first_id, int last_id, Var_t minval, Var_t maxval); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame>(int first_id, int last_id, Var_t minval, Var_t maxval, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPush>(int first_id, int last_id, Var_t minval, Var_t maxval, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnPop>(int first_id, int last_id, Var_t minval, Var_t maxval, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Frame_CarryOnBoth>(int first_id, int last_id, Var_t minval, Var_t maxval, lcf::rpg::SaveEventExecFrame*); \
+template void Game_Variables::N<DataScopeType::eDataScope_Map>(int first_id, int last_id, Var_t minval, Var_t maxval, int map_id); \
+template void Game_Variables::N<DataScopeType::eDataScope_MapEvent>(int first_id, int last_id, Var_t minval, Var_t maxval, int map_id, int event_id);
+
+EXPLICIT_INSTANCES_OP(Add)
+EXPLICIT_INSTANCES_OP(Sub)
+EXPLICIT_INSTANCES_OP(Mult)
+EXPLICIT_INSTANCES_OP(Div)
+EXPLICIT_INSTANCES_OP(Mod)
+EXPLICIT_INSTANCES_OP(BitOr)
+EXPLICIT_INSTANCES_OP(BitAnd)
+EXPLICIT_INSTANCES_OP(BitXor)
+EXPLICIT_INSTANCES_OP(BitShiftLeft)
+EXPLICIT_INSTANCES_OP(BitShiftRight)
+
+EXPLICIT_INSTANCES_RANGE_OP(AddRange)
+EXPLICIT_INSTANCES_RANGE_OP(SubRange)
+EXPLICIT_INSTANCES_RANGE_OP(MultRange)
+EXPLICIT_INSTANCES_RANGE_OP(DivRange)
+EXPLICIT_INSTANCES_RANGE_OP(ModRange)
+EXPLICIT_INSTANCES_RANGE_OP(BitOrRange)
+EXPLICIT_INSTANCES_RANGE_OP(BitAndRange)
+EXPLICIT_INSTANCES_RANGE_OP(BitXorRange)
+EXPLICIT_INSTANCES_RANGE_OP(BitShiftLeftRange)
+EXPLICIT_INSTANCES_RANGE_OP(BitShiftRightRange)
+
+EXPLICIT_INSTANCES_RANGEVAR_OP(SetRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(AddRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(SubRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(MultRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(DivRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(ModRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(BitOrRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(BitAndRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(BitXorRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(BitShiftLeftRangeVariable)
+EXPLICIT_INSTANCES_RANGEVAR_OP(BitShiftRightRangeVariable)
+
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(SetRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(AddRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(SubRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(MultRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(DivRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(ModRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(BitOrRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(BitAndRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(BitXorRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(BitShiftLeftRangeVariableIndirect)
+EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP(BitShiftRightRangeVariableIndirect)
+
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(SetRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(AddRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(SubRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(MultRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(DivRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(ModRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(BitOrRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(BitAndRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(BitXorRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(BitShiftLeftRangeRandom)
+EXPLICIT_INSTANCES_RANGE_RANDOM_OP(BitShiftRightRangeRandom)
+
+#undef EXPLICIT_INSTANCES_OP
+#undef EXPLICIT_INSTANCES_RANGE_OP
+#undef EXPLICIT_INSTANCES_RANGEVAR_OP
+#undef EXPLICIT_INSTANCES_RANGEVARINDIRECT_OP
+#undef EXPLICIT_INSTANCES_RANGE_RANDOM_OP

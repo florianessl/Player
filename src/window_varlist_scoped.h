@@ -15,30 +15,21 @@
  * along with EasyRPG Player. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef EP_WINDOW_VARLIST_H
-#define EP_WINDOW_VARLIST_H
+#ifndef EP_WINDOW_VARLIST_SCOPED_H
+#define EP_WINDOW_VARLIST_SCOPED_H
 
 // Headers
-#include "window_command.h"
-#include "lcf/rpg/saveeventexecframe.h"
+#include "window_selectable.h"
 
-class Window_VarList : public Window_Command
+class Window_VarListScoped : public Window_Selectable
 {
 public:
 	enum Mode {
 		eNone,
-		eSwitch,
-		eVariable,
-		eItem,
-		eTroop,
-		eMap,
-		eHeal,
-		eLevel,
-		eCommonEvent,
-		eMapEvent,
-		eString,
-		eFrameSwitch,
-		eFrameVariable
+		eMapSwitch,
+		eMapVariable,
+		eMapEventSwitch,
+		eMapEventVariable
 	};
 
 	/**
@@ -46,8 +37,8 @@ public:
 	 *
 	 * @param commands commands to display.
 	 */
-	Window_VarList(std::vector<std::string> commands);
-	~Window_VarList() override;
+	Window_VarListScoped();
+	~Window_VarListScoped() override;
 
 	/**
 	 * UpdateList.
@@ -55,6 +46,8 @@ public:
 	 * @param first_value starting value.
 	 */
 	void UpdateList(int first_value);
+
+	void UpdateCursorRect() override;
 
 	/**
 	 * Refreshes the window contents.
@@ -65,16 +58,16 @@ public:
 	 * Indicate what to display.
 	 *
 	 * @param mode the mode to set.
-	 * @param max_length_strings maximum size for items (Used for Strings)
 	 */
-	void SetMode(Mode mode, int max_length_strings = 0);
+	void SetMode(Mode mode);
 
 	/**
 	 * Returns the current mode.
 	 */
 	Mode GetMode() const;
 
-	void SetInterpreterFrame(lcf::rpg::SaveEventExecFrame* frame);
+	void SetScope(int map_id, int evt_id);
+
 private:
 
 	/**
@@ -85,14 +78,15 @@ private:
 	void DrawItemValue(int index);
 
 	Mode mode = eNone;
-	int first_var = 0, max_length_strings = 0;
+	std::vector<std::string> items;
+	int first_var = 0;
+	int scope_map_id = 0, scope_evt_id = 0;
 
 	bool DataIsValid(int range_index);
 
-	lcf::rpg::SaveEventExecFrame* frame;
 };
 
-inline Window_VarList::Mode Window_VarList::GetMode() const {
+inline Window_VarListScoped::Mode Window_VarListScoped::GetMode() const {
 	return mode;
 }
 

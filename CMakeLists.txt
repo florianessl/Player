@@ -193,6 +193,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/game_player.h
 	src/game_quit.cpp
 	src/game_quit.h
+	src/game_scoped_storage.cpp
+	src/game_scoped_storage.h
 	src/game_screen.cpp
 	src/game_screen.h
 	src/game_strings.cpp
@@ -465,6 +467,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/window_teleport.h
 	src/window_varlist.cpp
 	src/window_varlist.h
+	src/window_varlist_scoped.cpp
+	src/window_varlist_scoped.h
 )
 
 # These are actually unused when building in CMake

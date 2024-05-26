@@ -70,6 +70,7 @@ void Scene_Debug::ResetPrevIndices() {
 void Scene_Debug::Start() {
 	CreateRangeWindow();
 	CreateVarListWindow();
+	CreateVarListScopedWindow();
 	CreateNumberInputWindow();
 	CreateChoicesWindow();
 	CreateStringViewWindow();
@@ -79,6 +80,7 @@ void Scene_Debug::Start() {
 
 	range_window->SetActive(true);
 	var_window->SetActive(false);
+	var_scoped_window->SetActive(false);
 	stringview_window->SetActive(false);
 	interpreter_window->SetActive(false);
 
@@ -149,6 +151,10 @@ void Scene_Debug::UpdateFrameValueFromUi() {
 			idx.range_page_index = var_window->GetIndex();
 			frame.value = GetSelectedIndexFromRange() + var_window->GetIndex();
 			break;
+		case eUiVarListScoped:
+			idx.range_page_index = var_scoped_window->GetIndex() / 2;
+			frame.value = GetSelectedIndexFromRange() + var_scoped_window->GetIndex() - 1;
+			break;
 		case eUiNumberInput:
 			frame.value = numberinput_window->GetNumber();
 			break;
@@ -173,6 +179,7 @@ void Scene_Debug::Push(UiMode ui) {
 
 	range_window->SetActive(false);
 	var_window->SetActive(false);
+	var_scoped_window->SetActive(false);
 	interpreter_window->SetActive(false);
 	interpreter_window->SetVisible(false);
 	numberinput_window->SetActive(false);
@@ -185,6 +192,11 @@ int Scene_Debug::GetSelectedIndexFromRange() const {
 	switch (mode) {
 		case eInterpreter:
 			return range_page * 10 + range_index + 1;
+		case eMapSwitch:
+		case eMapVariable:
+		case eMapEventSwitch:
+		case eMapEventVariable:
+			return range_page * 80 + range_index * 8 + 1;
 	}
 	return range_page * 100 + range_index * 10 + 1;
 }
@@ -195,12 +207,23 @@ void Scene_Debug::RestoreRangeSelectionFromSelectedValue(int value) {
 			range_index = value % 10;
 			range_page = value / 10;
 			break;
+		case eMapSwitch:
+		case eMapVariable:
+		case eMapEventSwitch:
+		case eMapEventVariable:
+			range_index = (value % 80) / 8;
+			range_page = value / 80;
+			break;
 		default:
 			range_index = (value % 100) / 10;
 			range_page = value / 100;
 			break;
 	}
-} 
+}
+
+bool Scene_Debug::IsScopedView() const {
+	return (mode == eMapSwitch || mode == eMapVariable || mode == eMapEventSwitch || mode == eMapEventVariable);
+}
 
 void Scene_Debug::SetupUiRangeList() {
 	auto& idx = prev[mode];
@@ -209,11 +232,29 @@ void Scene_Debug::SetupUiRangeList() {
 	range_index = idx.range_index;
 	range_page = idx.range_page;
 
-	//if (mode == eInterpreter && (state_interpreter.show_frame_switches || state_interpreter.show_frame_vars)) {
-	//	var_window->SetMode(state_interpreter.show_frame_switches ? Window_VarList::eFrameSwitch : Window_VarList::eFrameVariable);
-	//} else {
+	if (IsScopedView()) {
+		switch (mode) {
+			case eMapSwitch:
+				var_scoped_window->SetMode(Window_VarListScoped::eMapSwitch);
+				break;
+			case eMapVariable:
+				var_scoped_window->SetMode(Window_VarListScoped::eMapVariable);
+				break;
+			case eMapEventSwitch:
+				var_scoped_window->SetMode(Window_VarListScoped::eMapEventSwitch);
+				break;
+			case eMapEventVariable:
+				var_scoped_window->SetMode(Window_VarListScoped::eMapEventVariable);
+				break;
+			default:
+				var_scoped_window->SetMode(Window_VarListScoped::eNone);
+				break;
+		}
+	} else if (mode == eInterpreter && (state_interpreter.show_frame_switches || state_interpreter.show_frame_vars)) {
+		var_window->SetMode(state_interpreter.show_frame_switches ? Window_VarList::eFrameSwitch : Window_VarList::eFrameVariable);
+	} else {
 		var_window->SetMode(vmode, mode == eString ? strings.size() : 0);
-	//}
+	}
 	UpdateDetailWindow();
 
 	range_window->SetIndex(range_index);
@@ -229,7 +270,9 @@ void Scene_Debug::PushUiRangeList() {
 	UpdateRangeListWindow();
 	RefreshDetailWindow();
 
-	if (mode == eInterpreter) {
+	if (IsScopedView()) {
+		var_scoped_window->SetVisible(true);
+	} else if (mode == eInterpreter) {
 		interpreter_window->SetVisible(true);
 	}
 }
@@ -250,6 +293,25 @@ void Scene_Debug::PushUiVarList() {
 
 	UpdateRangeListWindow();
 	var_window->Refresh();
+}
+
+void Scene_Debug::PushUiVarListScoped() {
+	const bool was_range_list = (GetFrame().uimode == eUiRangeList);
+
+	Push(eUiVarListScoped);
+
+	auto& idx = prev[mode];
+
+	if (!was_range_list) {
+		SetupUiRangeList();
+	}
+
+	var_scoped_window->SetActive(true);
+	var_scoped_window->SetVisible(true);
+	var_scoped_window->SetIndex(idx.range_page_index * 2);
+
+	UpdateRangeListWindow();
+	var_scoped_window->Refresh();
 }
 
 void Scene_Debug::PushUiNumberInput(int init_value, int digits, bool show_operator) {
@@ -337,6 +399,7 @@ void Scene_Debug::Pop() {
 
 	range_window->SetActive(false);
 	var_window->SetActive(false);
+	var_scoped_window->SetActive(false);
 	numberinput_window->SetActive(false);
 	numberinput_window->SetVisible(false);
 	choices_window->SetActive(false);
@@ -345,13 +408,20 @@ void Scene_Debug::Pop() {
 	stringview_window->SetVisible(false);
 	interpreter_window->SetActive(false);
 
-	if (mode == eInterpreter /* && !(state_interpreter.show_frame_switches || state_interpreter.show_frame_vars) */) {
+	if (IsScopedView()) {
+		var_window->SetVisible(false);
+		var_scoped_window->SetIndex(-1);
+		var_scoped_window->SetVisible(true);
+		interpreter_window->SetVisible(false);
+	} else if (mode == eInterpreter && !(state_interpreter.show_frame_switches || state_interpreter.show_frame_vars)) {
 		interpreter_window->SetIndex(-1);
 		interpreter_window->SetVisible(true);
 		var_window->SetVisible(false);
-	} else {
+		var_scoped_window->SetVisible(false);
+	}  else {
 		var_window->SetIndex(-1);
 		var_window->SetVisible(true);
+		var_scoped_window->SetVisible(false);
 		interpreter_window->SetVisible(false);
 	}
 
@@ -367,6 +437,7 @@ void Scene_Debug::Pop() {
 	switch (nui) {
 		case eUiMain:
 			var_window->SetMode(Window_VarList::eNone);
+			var_scoped_window->SetMode(Window_VarListScoped::eNone);
 			interpreter_window->SetVisible(false);
 			range_index = (static_cast<int>(mode) - 1) % 10;
 			range_page = (static_cast<int>(mode) - 1) / 10;
@@ -381,6 +452,10 @@ void Scene_Debug::Pop() {
 		case eUiVarList:
 			var_window->SetActive(true);
 			var_window->SetIndex((frame.value - 1) % 10);
+			break;
+		case eUiVarListScoped:
+			var_scoped_window->SetActive(true);
+			var_scoped_window->SetIndex(frame.value % 8);
 			break;
 		case eUiNumberInput:
 			numberinput_window->SetNumber(frame.value);
@@ -401,8 +476,8 @@ void Scene_Debug::Pop() {
 			interpreter_window->SetIndex(frame.value - 1);
 			var_window->SetVisible(false);
 			interpreter_window->SetVisible(true);
-			//state_interpreter.show_frame_switches = false;
-			//state_interpreter.show_frame_vars = false;
+			state_interpreter.show_frame_switches = false;
+			state_interpreter.show_frame_vars = false;
 			break;
 	}
 
@@ -421,7 +496,16 @@ void Scene_Debug::vUpdate() {
 		UpdateDetailWindow();
 		RefreshDetailWindow();
 	}
+	if (mode != eMapEventSwitch && mode != eMapEventVariable) {
+		state_scoped.evt_id = 0;
+	}
+	if (mode != eMapSwitch && mode != eMapVariable && mode != eMapEventSwitch && mode != eMapEventVariable) {
+		state_scoped.map_id = 0;
+	}
 	var_window->Update();
+
+	if (var_scoped_window->GetActive())
+		var_scoped_window->Update();
 
 	if (stringview_window->GetActive())
 		stringview_window->Update();
@@ -441,6 +525,9 @@ void Scene_Debug::vUpdate() {
 		Pop();
 
 		const auto sz = GetStackSize();
+		if ((mode == eMapSwitch || mode == eMapVariable || mode == eMapEventSwitch || mode == eMapEventVariable) && sz == 2) {
+			Pop(); //skip over extra number input window
+		}
 		if ((mode == eInterpreter) && sz == 4) {
 			Pop(); //skip over choices window
 		}
@@ -474,7 +561,7 @@ void Scene_Debug::vUpdate() {
 				break;
 			case eSwitch:
 				if (sz > 2) {
-					DoSwitch();
+					DoSwitch(GetFrame().value);
 				} else if (sz > 1) {
 					PushUiVarList();
 				} else if (sz > 0) {
@@ -483,7 +570,7 @@ void Scene_Debug::vUpdate() {
 				break;
 			case eVariable:
 				if (sz > 3) {
-					DoVariable();
+					DoVariable(GetFrame(1).value, GetFrame(0).value);
 				} else if (sz > 2) {
 					if (Main_Data::game_variables->IsValid(frame.value)) {
 						PushUiNumberInput(Main_Data::game_variables->Get(frame.value), Main_Data::game_variables->GetMaxDigits(), true);
@@ -622,18 +709,53 @@ void Scene_Debug::vUpdate() {
 				}
 				break;
 			case eInterpreter:
-				if (sz == 3) {
+				if (sz == 6) {
+					if (state_interpreter.show_frame_vars) {
+						DoVariable(GetFrame(1).value, GetFrame(0).value);
+					}
+				} else if (sz == 5) {
+					if (state_interpreter.show_frame_switches) {
+						DoSwitch(GetFrame().value);
+					} else if (state_interpreter.show_frame_vars) {
+						if (Main_Data::game_variables->IsValid<eDataScope_Frame>(frame.value)) {
+							PushUiNumberInput(Main_Data::game_variables->Get<eDataScope_Frame>(frame.value, &GetSelectedInterpreterFrameFromUiState()), Main_Data::game_variables->GetMaxDigits(), true);
+						}
+					}
+				} else if (sz == 4) {
+					if (frame.value < 0) {
+						Pop();
+					} else if (choices_window->IsItemEnabled(frame.value)) {
+						if (frame.value == 0) {
+							state_interpreter.show_frame_switches = true;
+							choices_window->SetVisible(false);
+							choices_window->SetActive(false);
+							PushUiVarList();
+						} else if (frame.value == 1) {
+							state_interpreter.show_frame_vars = true;
+							PushUiVarList();
+							choices_window->SetVisible(false);
+							choices_window->SetActive(false);
+						}
+					} else {
+						Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Buzzer));
+					}
+				} else if (sz == 3) {
 					if (state_interpreter.selected_frame >= 0) {
-						/*std::vector<std::string> choices;
+						std::vector<std::string> choices;
 						std::vector<bool> choices_enabled;
 
 						choices.push_back("FrameSwitches");
 						choices.push_back("FrameVariables");
 
+#ifdef SCOPEDVARS_LIBLCF_STUB
+						choices_enabled.push_back(false);
+						choices_enabled.push_back(false);
+#else
 						choices_enabled.push_back(GetSelectedInterpreterFrameFromUiState().easyrpg_frame_switches.size() > 0);
 						choices_enabled.push_back(GetSelectedInterpreterFrameFromUiState().easyrpg_frame_variables.size() > 0);
+#endif
 
-						PushUiChoices(choices, choices_enabled);*/
+						PushUiChoices(choices, choices_enabled);
 					} else {
 						Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Buzzer));
 					}
@@ -652,6 +774,74 @@ void Scene_Debug::vUpdate() {
 			case eOpenMenu:
 				DoOpenMenu();
 				break;
+			case eMapSwitch:
+			case eMapVariable:
+			{
+				if (sz == 1) {
+					state_scoped.map_id = 0;
+					state_scoped.evt_id = 0;
+					PushUiRangeList();
+					PushUiNumberInput(Game_Map::GetMapId(), 4, false);
+				} else if (sz == 3) {
+					if (state_scoped.map_id == 0) {
+						const auto map_id = GetFrame().value;
+						if (IsValidMapId(map_id)) {
+							Pop();
+							state_scoped.map_id = map_id;
+							PushUiRangeList();
+						}
+					} else {
+						PushUiVarListScoped();
+					}
+				} else {
+					if (mode == eMapSwitch) {
+						int sw_id = (sz == 4) ? GetFrame(0).value / 2 + 1 : GetFrame(1).value / 2 + 1;
+						HandleUiForScopedSwitch(sw_id, false);
+					} else {
+						int var_id = (sz == 4) ? GetFrame(0).value / 2 + 1 : GetFrame(1).value / 2 + 1;
+						HandleUiForScopedVariable(var_id, false);
+					}
+				}
+
+			}
+			break;
+			case eMapEventSwitch:
+			case eMapEventVariable:
+			{
+				if (sz == 1) {
+					state_scoped.map_id = 0;
+					state_scoped.evt_id = 0;
+					PushUiRangeList();
+					PushUiNumberInput(Game_Map::GetMapId(), 4, false);
+				} else if (sz == 3) {
+					if (state_scoped.map_id == 0) {
+						const auto map_id = GetFrame().value;
+						if (IsValidMapId(map_id)) {
+							Pop();
+							state_scoped.map_id = map_id;
+							PushUiNumberInput(0, 4, false);
+						}
+					} else if (state_scoped.evt_id == 0) {
+						const auto evt_id = GetFrame().value;
+						if (evt_id > 0) {
+							Pop();
+							state_scoped.evt_id = evt_id;
+							PushUiRangeList();
+						}
+					} else {
+						PushUiVarListScoped();
+					}
+				} else {
+					if (mode == eMapEventSwitch) {
+						int sw_id = (sz == 4) ? GetFrame(0).value / 2 + 1 : GetFrame(1).value / 2 + 1;
+						HandleUiForScopedSwitch(sw_id, true);
+					} else {
+						int var_id = (sz == 4) ? GetFrame(0).value / 2 + 1 : GetFrame(1).value / 2 + 1;
+						HandleUiForScopedVariable(var_id, true);
+					}
+				}
+			}
+			break;
 		}
 		Game_Map::SetNeedRefresh(true);
 	} else if (range_window->GetActive() && Input::IsRepeated(Input::RIGHT)) {
@@ -685,6 +875,126 @@ void Scene_Debug::vUpdate() {
 	UpdateArrows();
 }
 
+void Scene_Debug::HandleUiForScopedSwitch(const int sw_id, bool is_map_event) {
+	if (GetFrame(0).uimode != eUiChoices) {
+		bool valid = !is_map_event ? Main_Data::game_switches->IsValid<eDataScope_Map>(sw_id) : Main_Data::game_switches->IsValid<eDataScope_MapEvent>(sw_id);
+		if (valid) {
+			if (GetFrame(0).value % 2 == 0) {
+				std::vector<std::string> choices;
+				std::vector<bool> choices_enabled;
+
+				choices.push_back("Toggle auto-reset");
+				choices.push_back("Clear value");
+
+				choices_enabled.push_back(true);
+				choices_enabled.push_back(true);
+
+				PushUiChoices(choices, choices_enabled);
+			} else {
+				DoSwitch(sw_id);
+			}
+		} else {
+			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Buzzer));
+		}
+	} else {
+		if (choices_window->IsItemEnabled(GetFrame(0).value)) {
+			switch (GetFrame(0).value) {
+				case 0:
+					if (!is_map_event) {
+						Main_Data::game_switches->scoped_map.SetResetFlagForId(
+							sw_id,
+							!Main_Data::game_switches->scoped_map.IsAutoReset(sw_id, state_scoped.map_id),
+							state_scoped.map_id);
+					} else {
+						Main_Data::game_switches->scoped_mapevent.SetResetFlagForId(
+							sw_id,
+							!Main_Data::game_switches->scoped_mapevent.IsAutoReset(sw_id, state_scoped.map_id, state_scoped.evt_id),
+							state_scoped.map_id, state_scoped.evt_id);
+					}
+					break;
+				case 1:
+					if (!is_map_event) {
+						Main_Data::game_switches->scoped_map.ClearValue(sw_id, state_scoped.map_id);
+					} else {
+						Main_Data::game_switches->scoped_mapevent.ClearValue(sw_id, state_scoped.map_id, state_scoped.evt_id);
+					}
+					break;
+			}
+		} else {
+			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Buzzer));
+		}
+		Pop();
+	}
+}
+
+void Scene_Debug::HandleUiForScopedVariable(const int var_id, bool is_map_event) {
+	if (GetFrame(0).uimode != eUiChoices && GetFrame(0).uimode != eUiNumberInput) {
+		bool valid = !is_map_event ? Main_Data::game_variables->IsValid<eDataScope_Map>(var_id) : Main_Data::game_variables->IsValid<eDataScope_MapEvent>(var_id);
+		if (valid) {
+			if (GetFrame(0).value % 2 == 0) {
+				std::vector<std::string> choices;
+				std::vector<bool> choices_enabled;
+
+				choices.push_back("Toggle auto-reset");
+				choices.push_back("Clear value");
+
+				choices_enabled.push_back(true);
+				choices_enabled.push_back(true);
+
+				PushUiChoices(choices, choices_enabled);
+			} else {
+				int val = 0;
+				if (!is_map_event) {
+					if (Main_Data::game_variables->scoped_map.IsDefined(var_id, state_scoped.map_id)) {
+						val = Main_Data::game_variables->Get<eDataScope_Map>(var_id, state_scoped.map_id);
+					} else if (Main_Data::game_variables->scoped_map.IsDefaultValueDefined(var_id, state_scoped.map_id)) {
+						val = Main_Data::game_variables->scoped_map.GetDefaultValue(var_id);
+					}
+				} else {
+					if (Main_Data::game_variables->scoped_mapevent.IsDefined(var_id, state_scoped.map_id, state_scoped.evt_id)) {
+						val = Main_Data::game_variables->Get<eDataScope_MapEvent>(var_id, state_scoped.map_id, state_scoped.evt_id);
+					} else if (Main_Data::game_variables->scoped_mapevent.IsDefaultValueDefined(var_id, state_scoped.map_id, state_scoped.evt_id)) {
+						val = Main_Data::game_variables->scoped_mapevent.GetDefaultValue(var_id);
+					}
+				}
+				PushUiNumberInput(val, Main_Data::game_variables->GetMaxDigits(), true);
+			}
+		} else {
+			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Buzzer));
+		}
+	} else if (GetFrame(0).uimode == eUiNumberInput) {
+		DoVariable(var_id, GetFrame(0).value);
+	} else {
+		if (choices_window->IsItemEnabled(GetFrame(0).value)) {
+			switch (GetFrame(0).value) {
+				case 0:
+					if (!is_map_event) {
+						Main_Data::game_variables->scoped_map.SetResetFlagForId(
+							var_id,
+							!Main_Data::game_variables->scoped_map.IsAutoReset(var_id, state_scoped.map_id),
+							state_scoped.map_id);
+					} else {
+						Main_Data::game_variables->scoped_mapevent.SetResetFlagForId(
+							var_id,
+							!Main_Data::game_variables->scoped_mapevent.IsAutoReset(var_id, state_scoped.map_id, state_scoped.evt_id),
+							state_scoped.map_id, state_scoped.evt_id);
+					}
+					break;
+				case 1:
+					if (!is_map_event) {
+						Main_Data::game_variables->scoped_map.ClearValue(var_id, state_scoped.map_id);
+					} else {
+						Main_Data::game_variables->scoped_mapevent.ClearValue(var_id, state_scoped.map_id, state_scoped.evt_id);
+					}
+					break;
+			}
+		} else {
+			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Buzzer));
+		}
+		Pop();
+	}
+}
+
 void Scene_Debug::CreateRangeWindow() {
 
 	std::vector<std::string> ranges;
@@ -709,7 +1019,7 @@ void Scene_Debug::UpdateRangeListWindow() {
 	};
 
 	auto fillRange = [&](const auto& prefix) {
-		for (int i = 0; i < 10; i++){
+		for (int i = 0; i < 10; i++) {
 			const auto st = range_page * 100 + i * 10 + 1;
 			addItem(fmt::format("{}[{:04d}-{:04d}]", prefix, st, st + 9));
 		}
@@ -728,7 +1038,7 @@ void Scene_Debug::UpdateRangeListWindow() {
 				addItem("Goto Map", !is_battle);
 				addItem("Full Heal");
 				addItem("Level");
-			} else {
+			} else if (range_page == 1) {
 				addItem("Move Speed", !is_battle);
 				addItem("Call ComEvent");
 				addItem("Call MapEvent", Scene::Find(Scene::Map) != nullptr);
@@ -736,6 +1046,11 @@ void Scene_Debug::UpdateRangeListWindow() {
 				addItem("Strings", Player::IsPatchManiac());
 				addItem("Interpreter");
 				addItem("Open Menu", !is_battle);
+			} else {
+				addItem("MapSwitches", Player::HasEasyRpgExtensions() && Main_Data::game_switches->GetLimit<eDataScope_Map>() > 0);
+				addItem("MapVariables", Player::HasEasyRpgExtensions() && Main_Data::game_variables->GetLimit<eDataScope_Map>() > 0);
+				addItem("SelfSwitches", Player::HasEasyRpgExtensions() && Main_Data::game_switches->GetLimit<eDataScope_MapEvent>() > 0);
+				addItem("SelfVariables", Player::HasEasyRpgExtensions() && Main_Data::game_variables->GetLimit<eDataScope_MapEvent>() > 0);
 			}
 			break;
 		case eSwitch:
@@ -816,12 +1131,12 @@ void Scene_Debug::UpdateRangeListWindow() {
 			break;
 		case eInterpreter:
 		{
-			//if (state_interpreter.show_frame_switches || state_interpreter.show_frame_vars) {
-			//	for (int i = 0; i < 10; i++) {
-			//		const auto st = range_page * 100 + i * 10 + 1;
-			//		addItem(fmt::format("{}[{:03d}-{:03d}]", state_interpreter.show_frame_switches ? "FSw" : "FVr", st, st + 9));
-			//	}
-			//} else {
+			if (state_interpreter.show_frame_switches || state_interpreter.show_frame_vars) {
+				for (int i = 0; i < 10; i++) {
+					const auto st = range_page * 100 + i * 10 + 1;
+					addItem(fmt::format("{}[{:03d}-{:03d}]", state_interpreter.show_frame_switches ? "FSw" : "FVr", st, st + 9));
+				}
+			} else {
 				int skip_items = range_page * 10;
 				int count_items = 0;
 				if (range_page == 0) {
@@ -848,9 +1163,36 @@ void Scene_Debug::UpdateRangeListWindow() {
 					addItem(fmt::format("{}CE{:04d}: {}", state_interpreter.state_ce[i].wait_movement ? "(W) " : "", ce_id, ce->name));
 					count_items++;
 				}
-			//}
+			}
 		}
 		break;
+		case eMapSwitch:
+		case eMapVariable:
+			if (state_scoped.map_id == 0) {
+				addItem("Map: ");
+			} else {
+				for (int i = 0; i < 10; i++) {
+					const auto st = range_page * 40 + i * 4 + 1;
+					addItem(fmt::format("{}[{:03d}-{:03d}]", mode == eMapSwitch ? "MpSw" : "MpVr", st, st + 3));
+				}
+			}
+			break;
+		case eMapEventSwitch:
+		case eMapEventVariable:
+			if (state_scoped.map_id == 0) {
+				addItem("Map: ");
+				addItem("Evt: ");
+			} else if (state_scoped.evt_id == 0) {
+				addItem("Map: " + std::to_string(state_scoped.map_id));
+				addItem("Evt: ");
+			} else {
+
+				for (int i = 0; i < 2; i++) {
+					const auto st = range_page * 40 + i * 4 + 1;
+					addItem(fmt::format("{}[{:02d}-{:02d}]", mode == eMapEventSwitch ? "SelfSw" : "SelfVr", st, st + 3));
+				}
+			}
+			break;
 		default:
 			break;
 	}
@@ -861,32 +1203,37 @@ void Scene_Debug::UpdateRangeListWindow() {
 }
 
 void Scene_Debug::UpdateDetailWindow() {
-	if (mode == eInterpreter) {
-		//if (state_interpreter.show_frame_switches || state_interpreter.show_frame_vars) {
-		//	auto & interpreter_frame = GetSelectedInterpreterFrameFromUiState();
-		//	var_window->SetInterpreterFrame(&interpreter_frame);
-		//	var_window->UpdateList(GetSelectedIndexFromRange());
-		//	
-		//	interpreter_window->SetVisible(false);
-		//	interpreter_window->SetActive(false);
-		//} else {
+	if (IsScopedView()) {
+		var_scoped_window->SetScope(state_scoped.map_id, state_scoped.evt_id);
+		var_scoped_window->UpdateList(GetSelectedIndexFromRange() / 2 + 1);
+	} else if (mode == eInterpreter) {
+		if (state_interpreter.show_frame_switches || state_interpreter.show_frame_vars) {
+			auto& interpreter_frame = GetSelectedInterpreterFrameFromUiState();
+			var_window->SetInterpreterFrame(&interpreter_frame);
+			var_window->UpdateList(GetSelectedIndexFromRange());
+
+			interpreter_window->SetVisible(false);
+			interpreter_window->SetActive(false);
+		} else {
 			UpdateInterpreterWindow(GetSelectedIndexFromRange());
-		//}
+		}
 	} else {
 		var_window->UpdateList(GetSelectedIndexFromRange());
 	}
 }
 
 void Scene_Debug::RefreshDetailWindow() {
-	if (mode == eInterpreter) {
-		//if (state_interpreter.show_frame_switches || state_interpreter.show_frame_vars) {
-		//	var_window->Refresh();
-		//} else {
-			//var_window->SetInterpreterFrame(nullptr);
+	if (IsScopedView()) {
+		var_scoped_window->Refresh();
+	} else if (mode == eInterpreter) {
+		if (state_interpreter.show_frame_switches || state_interpreter.show_frame_vars) {
+			var_window->Refresh();
+		} else {
+			var_window->SetInterpreterFrame(nullptr);
 			interpreter_window->Refresh();
-		//}
+		}
 	} else {
-		//var_window->SetInterpreterFrame(nullptr);
+		var_window->SetInterpreterFrame(nullptr);
 		var_window->Refresh();
 	}
 }
@@ -902,6 +1249,16 @@ void Scene_Debug::CreateVarListWindow() {
 	var_window->SetIndex(-1);
 
 	var_window->UpdateList(GetSelectedIndexFromRange());
+}
+
+void Scene_Debug::CreateVarListScopedWindow() {
+	var_scoped_window.reset(new Window_VarListScoped());
+	var_scoped_window->SetX(Player::menu_offset_x + range_window->GetWidth());
+	var_scoped_window->SetY(range_window->GetY());
+	var_scoped_window->SetVisible(false);
+	var_scoped_window->SetIndex(-1);
+
+	var_scoped_window->UpdateList(GetSelectedIndexFromRange() / 2 + 1);
 }
 
 void Scene_Debug::CreateNumberInputWindow() {
@@ -938,6 +1295,8 @@ void Scene_Debug::CreateInterpreterWindow() {
 }
 
 int Scene_Debug::GetNumMainMenuItems() const {
+	if (!Player::HasEasyRpgExtensions())
+		return static_cast<int>(eMapSwitch) - 1;
 	return static_cast<int>(eLastMainMenuOption) - 1;
 }
 
@@ -975,18 +1334,37 @@ int Scene_Debug::GetLastPage() {
 			break;
 		case eString:
 			num_elements = strings.size();
+		case eMapSwitch:
+			num_elements = Main_Data::game_switches->GetLimit<eDataScope_Map>();
+			break;
+		case eMapVariable:
+			num_elements = Main_Data::game_variables->GetLimit<eDataScope_Map>();
+			break;
+		case eMapEventSwitch:
+			num_elements = Main_Data::game_switches->GetLimit<eDataScope_MapEvent>();
+			break;
+		case eMapEventVariable:
+			num_elements = Main_Data::game_variables->GetLimit<eDataScope_MapEvent>();
 			break;
 		case eInterpreter:
-			//if (state_interpreter.show_frame_switches) {
-			//	auto & interpreter_frame = GetSelectedInterpreterFrameFromUiState();
-			//	return interpreter_frame.easyrpg_frame_switches.size();	
-			//} else if (state_interpreter.show_frame_vars) {
-			//		auto & interpreter_frame = GetSelectedInterpreterFrameFromUiState();
-			//		return interpreter_frame.easyrpg_frame_variables.size();					
-			//} else {
+			if (state_interpreter.show_frame_switches) {
+#ifdef SCOPEDVARS_LIBLCF_STUB
+				return 0;
+#else
+				auto& interpreter_frame = GetSelectedInterpreterFrameFromUiState();
+				return interpreter_frame.easyrpg_frame_switches.size();
+#endif
+			} else if (state_interpreter.show_frame_vars) {
+#ifdef SCOPEDVARS_LIBLCF_STUB
+				return 0;
+#else
+				auto& interpreter_frame = GetSelectedInterpreterFrameFromUiState();
+				return interpreter_frame.easyrpg_frame_variables.size();
+#endif
+			} else {
 				num_elements = 1 + state_interpreter.ev.size() + state_interpreter.ce.size();
 				return (static_cast<int>(num_elements) - 1) / 10;
-			//}
+			}
 		default:
 			break;
 	}
@@ -1005,20 +1383,57 @@ bool Scene_Debug::IsValidMapId(int map_id) const {
 			&& iter->type == lcf::rpg::TreeMap::MapType_map);
 }
 
-void Scene_Debug::DoSwitch() {
-	const auto sw_id = GetFrame().value;
-	if (Main_Data::game_switches->IsValid(sw_id)) {
-		Main_Data::game_switches->Flip(sw_id);
+void Scene_Debug::DoSwitch(const int sw_id) {
+	bool changed = false;
+	switch (mode) {
+		case eSwitch:
+			if (Main_Data::game_switches->IsValid(sw_id)) {
+				Main_Data::game_switches->Flip(sw_id);
+				changed = true;
+			}
+			break;
+		case eMapSwitch:
+			if (Main_Data::game_switches->IsValid<eDataScope_Map>(sw_id)) {
+				Main_Data::game_switches->Flip<eDataScope_Map>(sw_id, state_scoped.map_id);
+				changed = true;
+			}
+			break;
+		case eMapEventSwitch:
+			if (Main_Data::game_switches->IsValid<eDataScope_MapEvent>(sw_id)) {
+				Main_Data::game_switches->Flip<eDataScope_MapEvent>(sw_id, state_scoped.map_id, state_scoped.evt_id);
+				changed = true;
+			}
+			break;
+		case eInterpreter:
+			if (Main_Data::game_switches->IsValid<eDataScope_Frame>(sw_id)) {
+				auto& interpreter_frame = GetSelectedInterpreterFrameFromUiState();
+				Main_Data::game_switches->Flip<eDataScope_Frame>(sw_id, &interpreter_frame);
+				changed = true;
+			}
+			break;
+	}
+	if (changed) {
 		Game_Map::SetNeedRefresh(true);
-
 		RefreshDetailWindow();
 	}
 }
 
-void Scene_Debug::DoVariable() {
-	const auto var_id = GetFrame(1).value;
-	const auto value = GetFrame(0).value;
-	Main_Data::game_variables->Set(var_id, value);
+void Scene_Debug::DoVariable(const int var_id, const int value) {
+	switch (mode) {
+		case eVariable:
+			Main_Data::game_variables->Set(var_id, value);
+			break;
+		case eMapVariable:
+			Main_Data::game_variables->Set<eDataScope_Map>(var_id, value, state_scoped.map_id);
+			break;
+		case eMapEventVariable:
+			Main_Data::game_variables->Set<eDataScope_MapEvent>(var_id, value, state_scoped.map_id, state_scoped.evt_id);
+			break;
+		case eInterpreter:
+			auto& interpreter_frame = GetSelectedInterpreterFrameFromUiState();
+			Main_Data::game_variables->Set<eDataScope_Frame>(var_id, value, &interpreter_frame);
+			break;
+	}
 	Game_Map::SetNeedRefresh(true);
 
 	Pop();

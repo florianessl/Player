@@ -48,7 +48,7 @@ void Window_VarList::Refresh() {
 	}
 }
 
-void Window_VarList::DrawItemValue(int index){
+void Window_VarList::DrawItemValue(int index) {
 	if (!DataIsValid(first_var+index)) {
 		return;
 	}
@@ -113,9 +113,33 @@ void Window_VarList::DrawItemValue(int index){
 			}
 		}
 		break;
+		case eFrameSwitch:
+		{
+			if (this->frame) {
+				auto value = Main_Data::game_switches->Get<eDataScope_Frame>(first_var + index, this->frame);
+				auto font = (!value) ? Font::ColorCritical : Font::ColorDefault;
+				DrawItem(index, Font::ColorDefault);
+				contents->TextDraw(GetWidth() - 16, 16 * index + 2, font, value ? "[ON]" : "[OFF]", Text::AlignRight);
+			}
+		}
+		break;
+		case eFrameVariable:
+		{
+			if (this->frame) {
+				auto value = Main_Data::game_variables->Get<eDataScope_Frame>(first_var + index, this->frame);
+				auto font = (value < 0) ? Font::ColorCritical : Font::ColorDefault;
+				DrawItem(index, Font::ColorDefault);
+				contents->TextDraw(GetWidth() - 16, 16 * index + 2, font, std::to_string(value), Text::AlignRight);
+			}
+		}
+		break;
 		case eNone:
 			break;
 	}
+}
+
+void Window_VarList::SetInterpreterFrame(lcf::rpg::SaveEventExecFrame* frame) {
+	this->frame = frame;
 }
 
 void Window_VarList::UpdateList(int first_value){
@@ -132,7 +156,15 @@ void Window_VarList::UpdateList(int first_value){
 			continue;
 		}
 		ss.str("");
-		ss << std::setfill('0') << std::setw(4) << (first_value + i) << ": ";
+		switch (mode) {
+			case eFrameSwitch:
+			case eFrameVariable:
+				ss << std::setfill('0') << std::setw(3) << (first_value + i) << ": ";
+				break;
+			default:
+				ss << std::setfill('0') << std::setw(4) << (first_value + i) << ": ";
+				break;
+		}
 		switch (mode) {
 			case eSwitch:
 				ss << Main_Data::game_switches->GetName(first_value + i);
@@ -175,6 +207,44 @@ void Window_VarList::UpdateList(int first_value){
 			case eMapEvent:
 				ss << Game_Map::GetEvent(first_value+i)->GetName();
 				break;
+			case eFrameSwitch:
+			case eFrameVariable:
+			{
+				int id = first_value + i;
+				auto check_carry_flag = [&](std::vector<uint32_t>& flags) {
+					if (((id-1) / 32) >= flags.size())
+						return false;
+					return (flags[((id-1) / 32)] & (1 << ((id-1) % 32))) > 0;
+				};
+				bool carry_out = false, carry_in = false;
+
+				switch (mode) {
+					case eFrameSwitch:
+						ss << Main_Data::game_switches->GetName(id, eDataScope_Frame);
+#ifndef SCOPEDVARS_LIBLCF_STUB
+						carry_out = check_carry_flag(this->frame.easyrpg_frame_switches_carry_flags_out);
+						carry_in = check_carry_flag(this->frame.easyrpg_frame_switches_carry_flags_in);
+#endif
+						break;
+					case eFrameVariable:
+						ss << Main_Data::game_variables->GetName(id, eDataScope_Frame);
+#ifndef SCOPEDVARS_LIBLCF_STUB
+						carry_out = check_carry_flag(this->frame.easyrpg_frame_variables_carry_flags_out);
+						carry_in = check_carry_flag(this->frame.easyrpg_frame_variables_carry_flags_in);
+#endif
+						break;
+				}
+				if (carry_out && carry_in) {
+					ss << " (< >)";
+				} else if (carry_out) {
+					ss << " (<)";
+				} else if (carry_in) {
+					ss << " (>)";
+				}
+
+				break;
+			}
+			break;
 			case eString:
 			default:
 				break;
@@ -212,9 +282,12 @@ bool Window_VarList::DataIsValid(int range_index) {
 			return Game_Map::GetEvent(range_index) != nullptr;
 		case eString:
 			return range_index > 0 && range_index <= max_length_strings;
+		case eFrameSwitch:
+			return Main_Data::game_switches->IsValid<eDataScope_Frame>(range_index);
+		case eFrameVariable:
+			return Main_Data::game_variables->IsValid<eDataScope_Frame>(range_index);
 		default:
 			break;
 	}
 	return false;
 }
-

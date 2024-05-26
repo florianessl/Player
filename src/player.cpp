@@ -878,6 +878,11 @@ void Player::ResetGameObjects() {
 	Main_Data::game_switches = std::make_unique<Game_Switches>();
 	Main_Data::game_switches->SetLowerLimit(lcf::Data::switches.size());
 
+	if (Player::HasEasyRpgExtensions()) {
+		Main_Data::game_switches->SetLowerLimit<eDataScope_Map>(lcf::Data::easyrpg_map_switches.size());
+		Main_Data::game_switches->SetLowerLimit<eDataScope_MapEvent>(lcf::Data::easyrpg_self_switches.size());
+	}
+
 	auto min_var = lcf::Data::system.easyrpg_variable_min_value;
 	if (min_var == 0) {
 		if ((Player::game_config.patch_maniac.Get() & 1) == 1) {
@@ -896,6 +901,11 @@ void Player::ResetGameObjects() {
 	}
 	Main_Data::game_variables = std::make_unique<Game_Variables>(min_var, max_var);
 	Main_Data::game_variables->SetLowerLimit(lcf::Data::variables.size());
+
+	if (Player::HasEasyRpgExtensions()) {
+		Main_Data::game_variables->SetLowerLimit<eDataScope_Map>(lcf::Data::easyrpg_map_variables.size());
+		Main_Data::game_variables->SetLowerLimit<eDataScope_MapEvent>(lcf::Data::easyrpg_self_variables.size());
+	}
 
 	Main_Data::game_strings = std::make_unique<Game_Strings>();
 
@@ -1154,9 +1164,23 @@ void Player::LoadSavegame(const std::string& save_name, int save_id) {
 	Game_Map::Dispose();
 
 	Main_Data::game_switches->SetLowerLimit(lcf::Data::switches.size());
-	Main_Data::game_switches->SetData(std::move(save->system.switches));
+	Main_Data::game_switches->SetData<eDataScope_Global, bool>(std::move(save->system.switches));
+	if (Player::HasEasyRpgExtensions()) {
+		Main_Data::game_switches->SetLowerLimit<eDataScope_Map>(lcf::Data::easyrpg_map_switches.size());
+		Main_Data::game_switches->SetLowerLimit<eDataScope_MapEvent>(lcf::Data::easyrpg_self_switches.size());
+#ifndef SCOPEDVARS_LIBLCF_STUB
+		Main_Data::game_switches->SetScopedStorageSaveData(std::move(save->easyrpg_data.scoped_switches));
+#endif
+	}
 	Main_Data::game_variables->SetLowerLimit(lcf::Data::variables.size());
 	Main_Data::game_variables->SetData(std::move(save->system.variables));
+	if (Player::HasEasyRpgExtensions()) {
+		Main_Data::game_variables->SetLowerLimit<eDataScope_Map>(lcf::Data::easyrpg_map_variables.size());
+		Main_Data::game_variables->SetLowerLimit<eDataScope_MapEvent>(lcf::Data::easyrpg_self_variables.size());
+#ifndef SCOPEDVARS_LIBLCF_STUB
+		Main_Data::game_variables->SetScopedStorageSaveData(std::move(save->easyrpg_data.scoped_variables));
+#endif
+	}
 	Main_Data::game_strings->SetData(std::move(save->system.maniac_strings));
 	Main_Data::game_system->SetupFromSave(std::move(save->system));
 	Main_Data::game_actors->SetSaveData(std::move(save->actors));

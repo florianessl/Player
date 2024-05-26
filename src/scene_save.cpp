@@ -136,7 +136,7 @@ bool Scene_Save::Save(std::ostream& os, int slot_id, bool prepare_save) {
 
 	save.targets = Main_Data::game_targets->GetSaveData();
 	save.system = Main_Data::game_system->GetSaveData();
-	save.system.switches = Main_Data::game_switches->GetData();
+	save.system.switches = Main_Data::game_switches->GetData<eDataScope_Global, bool>();
 	save.system.variables = Main_Data::game_variables->GetData();
 	save.system.maniac_strings = Main_Data::game_strings->GetLcfData();
 	save.inventory = Main_Data::game_party->GetSaveData();
@@ -144,6 +144,13 @@ bool Scene_Save::Save(std::ostream& os, int slot_id, bool prepare_save) {
 	save.screen = Main_Data::game_screen->GetSaveData();
 	save.pictures = Main_Data::game_pictures->GetSaveData();
 	save.easyrpg_data.windows = Main_Data::game_windows->GetSaveData();
+
+	if (Player::HasEasyRpgExtensions()) {
+#ifndef SCOPEDVARS_LIBLCF_STUB
+		save.easyrpg_data.scoped_switches = Main_Data::game_switches->GetScopedStorageSaveData();
+		save.easyrpg_data.scoped_variables = Main_Data::game_variables->GetScopedStorageSaveData();
+#endif
+	}
 
 	save.system.scene = Scene::instance ? Scene::rpgRtSceneFromSceneType(Scene::instance->type) : -1;
 

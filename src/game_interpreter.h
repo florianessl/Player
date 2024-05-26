@@ -183,6 +183,15 @@ protected:
 	bool OnFinishStackFrame();
 
 	/**
+	 * Copies over all frame-scoped switches & variables from one
+	 * frame to another, if their carry-flag has been set.
+	 * To be called either before Frame Pops or after Pushing a new frame.
+	 *
+	 * @param true if the the frame is about to be popped
+	 */
+	void CarryOverFrameScopedVariables(bool is_pop);
+
+	/**
 	 * Triggers a game over when all party members are dead.
 	 *
 	 * @return true if game over was started.
@@ -294,6 +303,9 @@ protected:
 	bool CommandEasyRpgConditionalBranchEx(lcf::rpg::EventCommand const& com);
 	bool CommandEasyRpgControlSwitchesEx(lcf::rpg::EventCommand const& com);
 	bool CommandEasyRpgControlVariablesEx(lcf::rpg::EventCommand const& com);
+	bool CommandControlScopedSwitches(lcf::rpg::EventCommand const& com);
+	bool CommandControlScopedVariables(lcf::rpg::EventCommand const& com);
+	bool CommandControlScopedTypeOptions(lcf::rpg::EventCommand const& com);
 	bool CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand const& com);
 
 	int DecodeInt(lcf::DBArray<int32_t>::const_iterator& it);

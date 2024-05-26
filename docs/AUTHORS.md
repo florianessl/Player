@@ -9,6 +9,7 @@ EasyRPG Player authors
 * Diego Pedraza (zegeri)
 * Erich Newey (enewey)
 * Dmytro Kushnariov (rohkea)
+* Florian Ignaz Eßl (florianessl)
 * Francisco de la Peña (fdelapena)
 * Gabriel Kind (Ghabry)
 * Glynn Clements (glynnc)

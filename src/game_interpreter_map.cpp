@@ -51,6 +51,7 @@
 #include "output.h"
 #include "player.h"
 #include "util_macro.h"
+#include "game_interpreter_shared.h"
 #include "game_interpreter_map.h"
 #include <lcf/reader_lcf.h>
 
@@ -76,6 +77,18 @@ void Game_Interpreter_Map::SetState(const lcf::rpg::SaveEventExecState& save) {
 	Clear();
 	_state = save;
 	_keyinput.fromSave(save);
+}
+
+void Game_Interpreter_Map::OnBeforeMapChange() {
+	if (Player::HasEasyRpgExtensions()) {
+		Main_Data::game_switches->scoped_map.ResetTemporaryData(Game_Map::GetMapId());
+		Main_Data::game_variables->scoped_map.ResetTemporaryData(Game_Map::GetMapId());
+
+		for (Game_Event& ev : Game_Map::GetEvents()) {
+			Main_Data::game_switches->scoped_mapevent.ResetTemporaryData(Game_Map::GetMapId(), ev.GetId());
+			Main_Data::game_variables->scoped_mapevent.ResetTemporaryData(Game_Map::GetMapId(), ev.GetId());
+		}
+	}
 }
 
 void Game_Interpreter_Map::OnMapChange() {

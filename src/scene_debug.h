@@ -24,6 +24,7 @@
 #include "window_command.h"
 #include "window_numberinput.h"
 #include "window_varlist.h"
+#include "window_varlist_scoped.h"
 #include "window_stringview.h"
 #include "window_interpreter.h"
 
@@ -73,13 +74,18 @@ public:
 		eString,
 		eInterpreter,
 		eOpenMenu,
-		eLastMainMenuOption,
+		eMapSwitch = 21,
+		eMapVariable,
+		eMapEventSwitch,
+		eMapEventVariable,
+		eLastMainMenuOption
 	};
 
 	enum UiMode {
 		eUiMain,
 		eUiRangeList,
 		eUiVarList,
+		eUiVarListScoped,
 		eUiNumberInput,
 		eUiStringView,
 		eUiChoices,
@@ -98,6 +104,9 @@ private:
 
 	/** Creates variable list View window. */
 	void CreateVarListWindow();
+
+	/** Creates the scoped variable list View window. */
+	void CreateVarListScopedWindow();
 
 	/** Creates number input window. */
 	void CreateNumberInputWindow();
@@ -120,10 +129,13 @@ private:
 
 	void RestoreRangeSelectionFromSelectedValue(int value);
 
+	/** */
+	bool IsScopedView() const;
+	
 	int GetNumMainMenuItems() const;
 
-	void DoSwitch();
-	void DoVariable();
+	void DoSwitch(const int sw_id);
+	void DoVariable(const int var_id, const int value);
 	void DoGold();
 	void DoItem();
 	void DoBattle();
@@ -142,13 +154,14 @@ private:
 	std::unique_ptr<Window_Command> range_window;
 	/** Displays the vars inside the current range. */
 	std::unique_ptr<Window_VarList> var_window;
+	std::unique_ptr<Window_VarListScoped> var_scoped_window;
 	/** Number Editor. */
 	std::unique_ptr<Window_NumberInput> numberinput_window;
 	/** Choices window. */
 	std::unique_ptr<Window_Command> choices_window;
-	/** Windows for displaying multiline strings. */
+	/** Window for displaying multiline strings. */
 	std::unique_ptr<Window_StringView> stringview_window;
-	/** Displays the currently running inteprreters. */
+	/** Displays the currently running interpreters. */
 	std::unique_ptr<Window_Interpreter> interpreter_window;
 
 	struct StackFrame {
@@ -169,10 +182,14 @@ private:
 	void SetupUiRangeList();
 	void PushUiRangeList();
 	void PushUiVarList();
+	void PushUiVarListScoped();
 	void PushUiNumberInput(int init_value, int digits, bool show_operator);
 	void PushUiChoices(std::vector<std::string> choices, std::vector<bool> choices_enabled);
 	void PushUiStringView();
 	void PushUiInterpreterView();
+
+	void HandleUiForScopedSwitch(const int sw_id, bool is_map_event);
+	void HandleUiForScopedVariable(const int var_id, bool is_map_event);
 
 	Window_VarList::Mode GetWindowMode() const;
 	void UpdateFrameValueFromUi();
@@ -189,18 +206,23 @@ private:
 
 	bool interpreter_states_cached = false;
 
+	struct {
+		int map_id = 0;
+		int evt_id = 0;
+	} state_scoped;
+
 	void UpdateInterpreterWindow(int index);
 	lcf::rpg::SaveEventExecFrame& GetSelectedInterpreterFrameFromUiState() const;
 	void CacheBackgroundInterpreterStates();
+
 	struct {
 		std::vector<int> ev;
 		std::vector<int> ce;
 		std::vector<lcf::rpg::SaveEventExecState> state_ev;
 		std::vector<lcf::rpg::SaveEventExecState> state_ce;
 
-		// Frame-scoped data types introduced in 'ScopedVars' branch
-		// bool show_frame_switches = false;
-		// bool show_frame_vars = false;
+		bool show_frame_switches = false;
+		bool show_frame_vars = false;
 		int selected_state = -1;
 		int selected_frame = -1;
 	} state_interpreter;

@@ -110,6 +110,9 @@ void Game_Player::PerformTeleport() {
 	}
 
 	const auto map_changed = (GetMapId() != teleport_target.GetMapId());
+	if (map_changed) {
+		Game_Map::GetInterpreter().OnBeforeMapChange();
+	}
 	MoveTo(teleport_target.GetMapId(), teleport_target.GetX(), teleport_target.GetY());
 
 

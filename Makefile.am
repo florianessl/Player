@@ -171,6 +171,8 @@ libeasyrpg_player_a_SOURCES = \
 	src/game_pictures.h \
 	src/game_player.cpp \
 	src/game_player.h \
+	src/game_scoped_storage.cpp \
+	src/game_scoped_storage.h \
 	src/game_screen.cpp \
 	src/game_screen.h \
 	src/game_strings.cpp \
@@ -443,7 +445,9 @@ libeasyrpg_player_a_SOURCES = \
 	src/window_teleport.cpp \
 	src/window_teleport.h \
 	src/window_varlist.cpp \
-	src/window_varlist.h
+	src/window_varlist.h \
+	src/window_varlist_scoped.cpp \
+	src/window_varlist_scoped.h
 
 SOURCEFILES_SDL2 = \
 	src/platform/sdl/sdl2_ui.cpp \
