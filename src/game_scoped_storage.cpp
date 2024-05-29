@@ -81,7 +81,7 @@ SCOPED_IMPL V Game_DataStorage_TPL::PerformOperation(const int id, const V value
 			vec[id - 1] = v;
 			return v;
 		} else {
-			V& v = static_cast<V>(vec[id - 1]);
+			V& v = vec[id - 1];
 			AssignOp(v, op(v, value));
 			return v;
 		}

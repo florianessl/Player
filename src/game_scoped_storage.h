@@ -896,7 +896,8 @@ inline const DynamicScope::ScopedDataStorage<typename Game_DataStorageBase<T, V,
 	auto it = _scopedData.find(hash);
 
 	if (it == _scopedData.end()) {
-		return {};
+		static ScopedDataStorage_t empty {};
+		return empty;
 	}
 	return it->second;
 }

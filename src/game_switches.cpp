@@ -115,7 +115,7 @@ lcf::rpg::SaveScopedSwitchData Game_Switches::scopedCreateSaveElement(DataScopeT
 	return result;
 }
 
-typename const Game_SwitchesBase::FrameStorage_const_t Game_SwitchesBase::GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const {
+const typename Game_SwitchesBase::FrameStorage_const_t Game_SwitchesBase::GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const {
 #ifndef SCOPEDVARS_LIBLCF_STUB
 	return std::tie(frame->easyrpg_frame_switches, frame->easyrpg_frame_switches_carry_flags_in, frame->easyrpg_frame_switches_carry_flags_out);
 #else
