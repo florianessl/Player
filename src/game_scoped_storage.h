@@ -60,7 +60,8 @@ namespace VarStorage {
 
 	enum DataStorageMode {
 		eStorageMode_Vector = 0,
-		eStorageMode_HashMap
+		eStorageMode_Map,
+		eStorageMode_Mixed
 	};
 
 	constexpr StringView TypeToStr(int type) {
@@ -77,66 +78,160 @@ namespace VarStorage {
 	constexpr bool IsVector = (storage_mode == eStorageMode_Vector);
 
 	template <DataStorageMode storage_mode>
-	constexpr bool IsMap = (storage_mode == eStorageMode_HashMap);
+	constexpr bool IsMap = (storage_mode == eStorageMode_Map);
+
+	template <DataStorageMode storage_mode>
+	constexpr bool IsMixed = (storage_mode == eStorageMode_Mixed);
+
+
+	template <typename V>
+	struct vector_map_mixed {
+		size_t bounds_vector = 200;
+		int max_key_map = 0;
+		std::vector<V> vec;
+		std::unordered_map<size_t, V> map;
+
+		size_t size() noexcept {
+			if (map.empty())
+				return vec.size();
+			return static_cast<size_t>(max_key_map);
+		}
+	};
 
 	template <typename V, DataStorageMode storage_mode>
 	struct DataStorage_t {
-		using storage_t = std::conditional_t<storage_mode == eStorageMode_Vector, std::vector<V>, std::unordered_map<int, V>>;
+		using storage_t = std::conditional_t<storage_mode == eStorageMode_Vector,
+			std::vector<V>,
+			std::conditional_t<storage_mode == eStorageMode_Map,
+				std::unordered_map<int, V>,
+				vector_map_mixed<V>
+			>
+		>;
 
-		template <DataStorageMode S = storage_mode, typename std::enable_if<IsVector<S>, int>::type = 0>
+		using reference = std::conditional_t<std::is_same<V, bool>::value, std::vector<bool>::reference, V&>;
+		using const_reference = std::conditional_t<std::is_same<V, bool>::value, std::vector<bool>::const_reference, V const&>;
+
+		template <DataStorageMode S = storage_mode, typename std::enable_if<IsMixed<S>, int>::type = 0>
+		inline void setVectorBounds(size_t bounds) noexcept {
+			this->data.bounds_vector = bounds;
+		}
+
 		inline const bool containsKey(const int id) const {
-			return id > 0 && id <= static_cast<int>(data.size());
-		};
-		template <DataStorageMode S = storage_mode, typename std::enable_if<IsMap<S>, int>::type = 0>
-		inline const bool containsKey(const int id) const {
-			auto it = data.find(id);
-			return it != data.end();
-		};
-
-		inline auto& operator[](const int id) noexcept {
-			return data[id - 1];
-		};
-		inline const auto& operator[](const int id) const noexcept {
-			return data[id - 1];
-		};
-		template <DataStorageMode S = storage_mode, typename std::enable_if<IsMap<S>, int>::type = 0>
-		inline auto& operator[](const int id) noexcept {
-			auto it = data.find(id);
-			return it->second;
-		};
-
-		template <DataStorageMode S = storage_mode, typename std::enable_if<IsMap<S>, int>::type = 0>
-		inline const auto& operator[](const int id) const noexcept  {
-			auto it = data.find(id);
-			return it->second;
-		};
-
-		template <DataStorageMode S = storage_mode, typename std::enable_if<IsVector<S>, int>::type = 0>
-		inline void prepare(const int first_id, const int last_id)  {
-			if (EP_UNLIKELY(last_id > static_cast<int>(data.size()))) {
-				data.resize(last_id, false);
+			if constexpr (IsVector<storage_mode>) {
+				return id > 0 && id <= static_cast<int>(data.size());
+			} else if constexpr (IsMap<storage_mode>) {
+				auto it = data.find(id);
+				return it != data.end();
+			} else {
+				return (id <= data.bounds_vector)
+					? (id > 0 && id <= static_cast<int>(data.vec.size()))
+					: (data.map.find(id) != data.map.end());
 			}
 		};
-		template <DataStorageMode S = storage_mode, typename std::enable_if<IsMap<S>, int>::type = 0>
-		void prepare(const int first_id, const int last_id) {
 
+		inline reference operator[](const int id) noexcept {
+			return data[id - 1];
 		};
+		inline const const_reference operator[](const int id) const noexcept {
+			return data[id - 1];
+		};
+
+		template <DataStorageMode S = storage_mode, typename std::enable_if<IsMap<S>, int>::type = 0>
+		inline reference operator[](const int id) noexcept {
+			auto it = data.find(id);
+			return it->second;
+		};
+
+		template <DataStorageMode S = storage_mode, typename std::enable_if<IsMap<S>, int>::type = 0>
+		inline const reference operator[](const int id) const noexcept {
+			auto it = data.find(id);
+			return it->second;
+		};
+
+		inline void prepare(const int first_id, const int last_id) {
+			if constexpr (IsVector<storage_mode>) {
+				if (EP_UNLIKELY(last_id > static_cast<int>(data.size()))) {
+					data.resize(last_id, false);
+				}
+			} else if constexpr (IsMixed<storage_mode>) {
+				if (EP_UNLIKELY(last_id <= data.bounds_vector && last_id > static_cast<int>(data.vec.size()))) {
+					data.vec.resize(last_id, false);
+				} else if (EP_UNLIKELY(last_id > data.max_key_map)) {
+					data.max_key_map = last_id;
+				}
+			}
+		};
+
 		const size_t size() const noexcept {
 			return data.size();
 		}
 
-		template <DataStorageMode S = storage_mode, typename std::enable_if<IsVector<S>, int>::type = 0>
-		inline void setData(std::vector<V> data) {
-			this->data = std::move(data);
-		}
-		template <DataStorageMode S = storage_mode, typename std::enable_if<IsVector<S>, int>::type = 0>
-		inline const std::vector<V> getData() const {
-			return this->data;
+		template <typename V2 = V, typename std::enable_if<std::is_same<V2, bool>::value, int>::type = 0>
+		inline void flip(const int id) {
+			this->data.flip(id - 1);
 		}
 
-		template <DataStorageMode S = storage_mode, typename std::enable_if<IsVector<S>, int>::type = 0>
-		inline std::vector<V>& vector_ref() {
-			return this->data;
+		inline void setData(std::vector<V> data) {
+			if constexpr (IsVector<storage_mode>) {
+				this->data = std::move(data);
+			} else if constexpr (IsMap<storage_mode>) {
+				//TODO
+			} else {
+				//TODO
+			}
+		}
+		inline const std::vector<V> getData() const {
+			if constexpr (IsVector<storage_mode>) {
+				return this->data;
+			} else if constexpr (IsMap<storage_mode>) {
+				//TODO
+			} else {
+				//TODO
+			}
+		}
+
+		inline void prepare_iterate(const int first_id, const int last_id) {
+			static_assert(!IsMap<storage_mode>);
+
+			if constexpr (IsVector<storage_mode>) {
+				return prepare(first_id, last_id);
+			} else if constexpr (IsMixed<storage_mode>) {
+				if (EP_UNLIKELY(last_id <= data.bounds_vector && last_id > static_cast<int>(data.vec.size()))) {
+					data.vec.resize(last_id, false);
+				} else if (EP_UNLIKELY(last_id > data.max_key_map)) {
+					data.max_key_map = last_id + 1;
+					data.bounds_vector = last_id;
+					data.vec.resize(last_id, false);
+
+					for (auto& it = data.map.begin(); it != data.map.end();) {
+						if (it.first < data.max_key_map) {
+							it = data.map.erase(it);
+						} else {
+							it++;
+						}
+					}
+				}
+			}
+		}
+
+		inline typename std::vector<V>::iterator begin() noexcept {
+			static_assert(!IsMap<storage_mode>);
+			return data.begin();
+		}
+
+		inline typename std::vector<V>::const_iterator begin() const noexcept {
+			static_assert(!IsMap<storage_mode>);
+			return data.begin();
+		}
+
+		inline typename std::vector<V>::iterator end() noexcept {
+			static_assert(!IsMap<storage_mode>);
+			return data.end();
+		}
+
+		inline typename std::vector<V>::const_iterator end() const noexcept {
+			static_assert(!IsMap<storage_mode>);
+			return data.end();
 		}
 
 	private:
@@ -146,19 +241,19 @@ namespace VarStorage {
 
 namespace DynamicScope {
 
-	static constexpr size_t scopedvar_maps_default_count = 12;
-	static constexpr size_t scopedvar_mapevents_default_count = 4;
+	constexpr size_t scopedvar_maps_default_count = 12;
+	constexpr size_t scopedvar_mapevents_default_count = 4;
 
-	static constexpr size_t scopedvar_frame_max_count = 255;  // soft-capped to 255
-	static constexpr size_t scopedvar_maps_max_count = 255;  // soft-capped to 255
-	static constexpr size_t scopedvar_mapevents_max_count = 8; // hard-capped to 8 due to how parameters are packed in interpreter commands
+	constexpr size_t scopedvar_frame_max_count = 255;  // soft-capped to 255
+	constexpr size_t scopedvar_maps_max_count = 255;  // soft-capped to 255
+	constexpr size_t scopedvar_mapevents_max_count = 8; // hard-capped to 8 due to how parameters are packed in interpreter commands
 
-	static constexpr int scopedvar_max_map_id = 9999;
-	static constexpr int scopedvar_max_event_id = (0x7FFFFFF / 10000) - 1;
-	static constexpr int scopedvar_max_var_id_for_uint32_packing = 9999;
-	static constexpr int namedvar_max_varname_length = 32;
+	constexpr int scopedvar_max_map_id = 9999;
+	constexpr int scopedvar_max_event_id = (0x7FFFFFF / 10000) - 1;
+	constexpr int scopedvar_max_var_id_for_uint32_packing = 9999;
+	constexpr int namedvar_max_varname_length = 32;
 
-	static constexpr int count_global_scopes = 1;
+	constexpr int count_global_scopes = 1;
 
 	constexpr bool IsGlobalScope(DataScopeType scope) {
 		return scope == DataScopeType::eDataScope_Global;
@@ -195,7 +290,7 @@ namespace DynamicScope {
 	}
 
 	template <typename Data_t, typename V>
-	struct ScopedDataStorage {
+	class ScopedDataStorage {
 	public:
 		enum Flags : uint8_t {
 			eFlag_ReadOnly = 0x01,
@@ -204,17 +299,14 @@ namespace DynamicScope {
 			eFlag_DefaultValueDefined = 0x08,
 			eFlag_MapGrpInheritedValue = 0x10
 		};
-		bool valid;
-		int map_id, evt_id;
-		std::unordered_map<int, int> flags;
 
 		inline const bool containsKey(const int id) const {
 			return data.size();
 		};
-		inline auto& operator[](const int id) noexcept {
+		inline typename Data_t::reference operator[](const int id) noexcept {
 			return data[id];
 		};
-		inline const auto& operator[](const int id) const noexcept {
+		inline typename Data_t::const_reference operator[](const int id) const noexcept {
 			return data[id];
 		};
 		inline void prepare(const int first_id, const int last_id) {
@@ -229,20 +321,19 @@ namespace DynamicScope {
 		inline std::vector<V> getData() const {
 			return this->data.getData();
 		}
-
-		inline std::vector<V>& vector_ref() {
-			return this->data.vector_ref();
-		}
+		bool valid = false;
+		int map_id = 0, evt_id = 0;
+		std::unordered_map<int, int> flags;
 	private:
 		Data_t data;
 	};
 }
 
-#define SCOPED_WITH_DEFAULT template<DataScopeType = DataScopeType::eDataScope_Global, typename... Args>
+#define SCOPED_WITH_DEFAULT template<DataScopeType S = DataScopeType::eDataScope_Global, typename... Args>
 #define SCOPED_IMPL template<DataScopeType S, typename... Args>
-#define SCOPED_GLOBAL_ONLY template<DataScopeType = DataScopeType::eDataScope_Global> //TODO: requires DynamicScope::IsGlobalScope(DataScopeType)
-#define SCOPED_DYN_ONLY template<DataScopeType> //TODO: requires DynamicScope::IsVariableScope(DataScopeType)
-#define SCOPED_MAP_ONLY template<DataScopeType> //TODO: requires DynamicScope::IsMapScope(DataScopeType)
+#define SCOPED_GLOBAL_ONLY template<DataScopeType S = DataScopeType::eDataScope_Global> //TODO: requires DynamicScope::IsGlobalScope(DataScopeType)
+#define SCOPED_DYN_ONLY template<DataScopeType S> //TODO: requires DynamicScope::IsVariableScope(DataScopeType)
+#define SCOPED_MAP_ONLY template<DataScopeType S> //TODO: requires DynamicScope::IsMapScope(DataScopeType)
 
 #define ASSERT_IS_GLOBAL_SCOPE(S, ERR) static_assert(DynamicScope::IsGlobalScope(S), "Invalid scope for " ERR "!");
 #define ASSERT_IS_VARIABLE_SCOPE(S, ERR) static_assert(DynamicScope::IsVariableScope(S), "Invalid scope for " ERR "!");
@@ -250,22 +341,99 @@ namespace DynamicScope {
 #define ASSERT_IS_MAP_SCOPE(S, ERR) static_assert(DynamicScope::IsMapScope(S) , "Invalid scope for " ERR "!");
 #define ASSERT_IS_MAPEVENT_SCOPE(S, ERR) static_assert(DynamicScope::IsMapEventScope(S), "Invalid scope for " ERR "!");
 
+namespace DynamicScope {
+	using limit_array_t = std::array <size_t, (eDataScope_MAX + 1)>;
+	template<typename Data_t> using globals_array_t = std::array<Data_t, DynamicScope::count_global_scopes>;
+
+	template<DataScopeType, typename Data_t> constexpr bool IsValid(limit_array_t const& limits, globals_array_t<Data_t> const& globals, const int id);
+	template<DataScopeType> constexpr size_t GetLimit(limit_array_t const& limits);
+	template<DataScopeType> constexpr void SetLowerLimit(limit_array_t& limits, size_t limit);
+	template<DataScopeType, typename Data_t> constexpr int GetSize(globals_array_t<Data_t> const& globals);
+	template<DataScopeType, typename Data_t> constexpr int GetSizeWithLimit(limit_array_t const& limits, globals_array_t<Data_t> const& globals);
+
+	constexpr void InitLimits(limit_array_t& limits) {
+		limits[eDataScope_Global] = 0;
+		limits[eDataScope_Frame] = DynamicScope::scopedvar_frame_max_count;
+		limits[eDataScope_Frame_CarryOnPush] = DynamicScope::scopedvar_frame_max_count;
+		limits[eDataScope_Frame_CarryOnPop] = DynamicScope::scopedvar_frame_max_count;
+		limits[eDataScope_Frame_CarryOnBoth] = DynamicScope::scopedvar_frame_max_count;
+		limits[eDataScope_Map] = 0;
+		limits[eDataScope_MapEvent] = DynamicScope::scopedvar_mapevents_default_count;
+	}
+
+	template<DataScopeType S, typename Data_t> constexpr bool IsValid(limit_array_t const& limits, globals_array_t<Data_t> const& globals, const int id) {
+		if constexpr (DynamicScope::IsGlobalScope(S)) {
+			return id > 0 && id <= GetSizeWithLimit<S>(limits, globals);
+		}
+		if constexpr (DynamicScope::IsFrameScope(S)) {
+			return id > 0 && id <= GetLimit<S>(limits);
+		}
+		if constexpr (DynamicScope::IsMapScope(S) || DynamicScope::IsMapEventScope(S)) {
+			return id > 0 && id <= GetLimit<S>(limits);
+		}
+		return false;
+	}
+
+	template<DataScopeType S> constexpr size_t GetLimit(limit_array_t const& limits) {
+		static_assert(S <= eDataScope_MAX);
+
+		return limits[static_cast<int>(S)];
+	}
+
+	template<DataScopeType S> constexpr void SetLowerLimit(limit_array_t& limits, size_t limit) {
+		static_assert(!DynamicScope::IsFrameScope(S), "Setting limit for Scope 'Frame' not allowed!");
+
+		if constexpr (DynamicScope::IsGlobalScope(S)) {
+			limits[static_cast<int>(S)] = limit;
+		}
+		if constexpr (DynamicScope::IsMapScope(S)) {
+			if (limit > DynamicScope::scopedvar_maps_max_count) {
+				Output::Debug("Invalid limit for Scope 'Map': {}", limit);
+			}
+			limits[static_cast<int>(S)] = std::min(limit, DynamicScope::scopedvar_maps_max_count);
+		}
+		if constexpr (DynamicScope::IsMapEventScope(S)) {
+			if (limit > DynamicScope::scopedvar_maps_max_count) {
+				Output::Debug("Invalid limit for Scope 'MapEvent': {}", limit);
+			}
+			limits[static_cast<int>(S)] = std::min(limit, DynamicScope::scopedvar_mapevents_max_count);
+		}
+	}
+
+	template<DataScopeType S, typename Data_t> constexpr int GetSize(globals_array_t<Data_t> const& globals) {
+		ASSERT_IS_GLOBAL_SCOPE(S, "GetSize");
+		return static_cast<int>(globals[static_cast<int>(S)].size());
+	}
+
+	template<DataScopeType S, typename Data_t> constexpr int GetSizeWithLimit(limit_array_t const& limits, globals_array_t<Data_t> const& globals) {
+		ASSERT_IS_GLOBAL_SCOPE(S, "GetSizeWithLimit");
+		return std::max<int>(static_cast<int>(GetLimit<S>(limits)), static_cast<int>(globals[static_cast<int>(S)].size()));
+	}
+
+	template<DataScopeType S, typename Data_t> const Data_t& GetStorage(globals_array_t<Data_t> const& globals) {
+		ASSERT_IS_GLOBAL_SCOPE(S, "GetStorage");
+		return globals[static_cast<int>(S)];
+	}
+
+	template<DataScopeType S, typename Data_t> Data_t& GetStorageForEdit(globals_array_t<Data_t>& globals) {
+		ASSERT_IS_GLOBAL_SCOPE(S, "GetStorageForEdit");
+		return globals[static_cast<int>(S)];
+	}
+}
+
 template <typename T, typename V>
 class Game_VectorDataStorageBase {
 public:
 	typedef VarStorage::DataStorage_t<V, VarStorage::eStorageMode_Vector> Data_t;
 
-	Game_VectorDataStorageBase();
+	Game_VectorDataStorageBase() { DynamicScope::InitLimits(_limits); }
 
-	SCOPED_GLOBAL_ONLY bool IsValid(int id) const;
+	SCOPED_WITH_DEFAULT inline bool IsValid(const int id) const { return DynamicScope::IsValid<S, Data_t>(_limits, _globals, id); }
+	SCOPED_WITH_DEFAULT inline size_t GetLimit() const { return DynamicScope::GetLimit<S>(_limits); }
+	SCOPED_WITH_DEFAULT inline void SetLowerLimit(size_t limit) { DynamicScope::SetLowerLimit<S>(_limits, limit); }
 
-	template<DataScopeType scope>
-	size_t GetLimit() const;
-
-	SCOPED_GLOBAL_ONLY void SetLowerLimit(size_t limit);
-
-	SCOPED_GLOBAL_ONLY int GetSize() const;
-	SCOPED_GLOBAL_ONLY int GetSizeWithLimit() const;
+	SCOPED_GLOBAL_ONLY inline int GetSize() const { return DynamicScope::GetSize<S, Data_t>(_globals); }
+	SCOPED_GLOBAL_ONLY inline int GetSizeWithLimit() const { return DynamicScope::GetSizeWithLimit<S, Data_t>(_limits, _globals); }
 
 	template<DataScopeType = DataScopeType::eDataScope_Global, typename C = V>
 	void SetData(std::vector<V> data);
@@ -273,43 +441,72 @@ public:
 	std::vector<V> GetData() const;
 
 protected:
-	SCOPED_GLOBAL_ONLY const Data_t& GetStorage() const;
-	SCOPED_GLOBAL_ONLY Data_t& GetStorageForEdit();
+	SCOPED_GLOBAL_ONLY const Data_t& GetStorage() const { return DynamicScope::GetStorage<S, Data_t>(_globals); }
+	SCOPED_GLOBAL_ONLY Data_t& GetStorageForEdit() { return DynamicScope::GetStorageForEdit<S, Data_t>(_globals); }
 
 private:
-	Data_t _globals[DynamicScope::count_global_scopes];
-	size_t _limits[eDataScope_MAX + 1];
+	DynamicScope::globals_array_t<Data_t> _globals;
+	DynamicScope::limit_array_t _limits;
 };
 
 template <typename T, typename V>
-class Game_HashMapDataStorageBase {
+class Game_MapDataStorageBase {
 public:
-	typedef VarStorage::DataStorage_t<V, VarStorage::eStorageMode_HashMap> Data_t;
+	typedef VarStorage::DataStorage_t<V, VarStorage::eStorageMode_Map> Data_t;
 
 	static_assert(!std::is_same<V, bool>::value);
 
+	Game_MapDataStorageBase() { DynamicScope::InitLimits(_limits); }
+
 protected:
-	SCOPED_GLOBAL_ONLY const Data_t& GetStorage() const;
-	SCOPED_GLOBAL_ONLY Data_t& GetStorageForEdit();
+	SCOPED_GLOBAL_ONLY const Data_t& GetStorage() const { return DynamicScope::GetStorage<S, Data_t>(_globals); }
+	SCOPED_GLOBAL_ONLY Data_t& GetStorageForEdit() { return DynamicScope::GetStorageForEdit<S, Data_t>(_globals); }
 
 private:
-	Data_t _globals[DynamicScope::count_global_scopes];
+	DynamicScope::globals_array_t<Data_t> _globals;
+	DynamicScope::limit_array_t _limits;
 };
 
 template <typename T, typename V>
-inline Game_VectorDataStorageBase<T, V>::Game_VectorDataStorageBase() {
-	_limits[eDataScope_Global] = 0;
-	_limits[eDataScope_Frame] = DynamicScope::scopedvar_frame_max_count;
-	_limits[eDataScope_Frame_CarryOnPush] = DynamicScope::scopedvar_frame_max_count;
-	_limits[eDataScope_Frame_CarryOnPop] = DynamicScope::scopedvar_frame_max_count;
-	_limits[eDataScope_Frame_CarryOnBoth] = DynamicScope::scopedvar_frame_max_count;
-	_limits[eDataScope_Map] = 0;
-	_limits[eDataScope_MapEvent] = DynamicScope::scopedvar_mapevents_default_count;
-}
+class Game_MixedDataStorageBase {
+public:
+	typedef VarStorage::DataStorage_t<V, VarStorage::eStorageMode_Mixed> Data_t;
 
+	Game_MixedDataStorageBase() { DynamicScope::InitLimits(_limits); }
+
+	SCOPED_WITH_DEFAULT inline bool IsValid(const int id) const { return DynamicScope::IsValid<S, Data_t>(_limits, _globals, id); }
+	SCOPED_WITH_DEFAULT inline size_t GetLimit() const { return DynamicScope::GetLimit<S>(_limits); }
+	SCOPED_WITH_DEFAULT inline void SetLowerLimit(size_t limit) {
+		DynamicScope::SetLowerLimit<S>(_limits, limit);
+		for (int i = 0; i < _globals.size(); i++)
+			_globals[i].bounds_vector = limit;
+	}
+
+	SCOPED_GLOBAL_ONLY inline int GetSize() const { return DynamicScope::GetSize<S, Data_t>(_globals); }
+	SCOPED_GLOBAL_ONLY inline int GetSizeWithLimit() const { return DynamicScope::GetSizeWithLimit<S, Data_t>(_limits, _globals); }
+
+	template<DataScopeType = DataScopeType::eDataScope_Global, typename C = V>
+	void SetData(std::vector<V> data);
+	template<DataScopeType = DataScopeType::eDataScope_Global, typename C = V>
+	std::vector<V> GetData() const;
+
+protected:
+	SCOPED_GLOBAL_ONLY const Data_t& GetStorage() const { return DynamicScope::GetStorage<S, Data_t>(_globals); }
+	SCOPED_GLOBAL_ONLY Data_t& GetStorageForEdit() { return DynamicScope::GetStorageForEdit<S, Data_t>(_globals); }
+
+private:
+	DynamicScope::globals_array_t<Data_t> _globals;
+	DynamicScope::limit_array_t _limits;
+};
 
 template <typename T, typename V, VarStorage::DataStorageMode storage_mode>
-using Game_DataStorageBase = std::conditional_t<storage_mode == VarStorage::eStorageMode_Vector, Game_VectorDataStorageBase<T, V>, Game_HashMapDataStorageBase<T, V>>;
+using Game_DataStorageBase = std::conditional_t<storage_mode == VarStorage::eStorageMode_Vector,
+	Game_VectorDataStorageBase<T, V>,
+	std::conditional_t<storage_mode == VarStorage::eStorageMode_Map,
+		Game_MapDataStorageBase<T, V>,
+		Game_MixedDataStorageBase<T, V>
+	>
+>;
 
 #define Game_DataStorage_Declare_TPL template <typename D, typename T, typename V, VarStorage::DataStorageMode storage_mode>
 #define Game_DataStorage_TPL Game_DataStorage<D, T, V, storage_mode>
@@ -322,6 +519,7 @@ public:
 
 	typedef DynamicScope::ScopedDataStorage<Data_t, V> ScopedDataStorage_t;
 	typedef std::tuple<std::vector<V>&, std::vector<uint32_t>&, std::vector<uint32_t>&> FrameStorage_t;
+	typedef std::tuple<const std::vector<V>&, const std::vector<uint32_t>&, const std::vector<uint32_t>&> FrameStorage_const_t;
 
 	static constexpr int kMaxWarnings = 10;
 
@@ -428,7 +626,7 @@ protected:
 	void PerformRangeOperation(const int first_id, const int last_id, F&& value, op_Func&& op, Args... args);
 
 	void AssignOp(V& target, V value) const;
-	const FrameStorage_t GetFrameStorage(const lcf::rpg::SaveEventExecFrame* frame) const;
+	const FrameStorage_const_t GetFrameStorage(const lcf::rpg::SaveEventExecFrame* frame) const;
 	FrameStorage_t GetFrameStorageForEdit(lcf::rpg::SaveEventExecFrame* frame);
 	void SetCarryFlagForFrameStorage(std::vector<uint32_t>& carry_flags, int id) const;
 
@@ -468,67 +666,7 @@ private:
 	ScopedDataStorage_t _scoped_null_storage;
 };
 
-template <typename T, typename V>
-template <DataScopeType S>
-inline bool Game_VectorDataStorageBase<T, V>::IsValid(int id) const {
-	if constexpr (DynamicScope::IsGlobalScope(S)) {
-		return id > 0 && id <= GetSizeWithLimit<S>();
-	}
-	if constexpr (DynamicScope::IsFrameScope(S)) {
-		return id > 0 && id <= GetLimit<S>();
-	}
-	if constexpr (DynamicScope::IsMapScope(S) || DynamicScope::IsMapEventScope(S)) {
-		return id > 0 && id <= GetLimit<S>();
-	}
-}
-
-template <typename T, typename V>
-template <DataScopeType S>
-inline size_t Game_VectorDataStorageBase<T, V>::GetLimit() const {
-	return _limits[static_cast<int>(S)];
-}
-
-template <typename T, typename V>
-template <DataScopeType S>
-inline void Game_VectorDataStorageBase<T, V>::SetLowerLimit(size_t limit) {
-	static_assert(!DynamicScope::IsFrameScope(S), "Setting limit for Scope 'Frame' not allowed!");
-
-	if constexpr (DynamicScope::IsGlobalScope(S)) {
-		_limits[static_cast<int>(S)] = limit;
-	}
-	if constexpr (DynamicScope::IsMapScope(S)) {
-		if (limit > DynamicScope::scopedvar_maps_max_count) {
-			Output::Debug("Invalid limit for Scope 'Map': {}", limit);
-		}
-		_limits[static_cast<int>(S)] = std::min(limit, DynamicScope::scopedvar_maps_max_count);
-	}
-	if constexpr (DynamicScope::IsMapEventScope(S)) {
-		if (limit > DynamicScope::scopedvar_maps_max_count) {
-			Output::Debug("Invalid limit for Scope 'MapEvent': {}", limit);
-		}
-		_limits[static_cast<int>(S)] = std::min(limit, DynamicScope::scopedvar_mapevents_max_count);
-	}
-}
-
-template <typename T, typename V>
-template <DataScopeType S>
-inline int Game_VectorDataStorageBase<T, V>::GetSize() const {
-	ASSERT_IS_GLOBAL_SCOPE(S, "GetSize");
-
-	static_assert(static_cast<int>(S) < DynamicScope::count_global_scopes);
-
-	return static_cast<int>(_globals[static_cast<int>(S)].size());
-}
-
-template <typename T, typename V>
-template <DataScopeType S>
-inline int Game_VectorDataStorageBase<T, V>::GetSizeWithLimit() const {
-	ASSERT_IS_GLOBAL_SCOPE(S, "GetSizeWithLimit");
-
-	static_assert(static_cast<int>(S) < DynamicScope::count_global_scopes);
-
-	return std::max<int>(static_cast<int>(GetLimit<S>()), static_cast<int>(_globals[static_cast<int>(S)].size()));
-}
+// Game_VectorDataStorageBase definitions
 
 template <typename T, typename V>
 template<DataScopeType S, typename C>
@@ -566,45 +704,48 @@ inline std::vector<V> Game_VectorDataStorageBase<T, V>::GetData() const {
 	}
 }
 
+// END Game_VectorDataStorageBase definitions
+
+
+// Game_MixedDataStorageBase definitions
+
 template <typename T, typename V>
-template <DataScopeType S>
-inline const typename Game_VectorDataStorageBase<T, V>::Data_t& Game_VectorDataStorageBase<T, V>::GetStorage() const {
-	ASSERT_IS_GLOBAL_SCOPE(S, "GetStorage");
+template<DataScopeType S, typename C>
+inline void Game_MixedDataStorageBase<T, V>::SetData(std::vector<V> data) {
+	ASSERT_IS_GLOBAL_SCOPE(S, "SetData");
 
 	static_assert(static_cast<int>(S) < DynamicScope::count_global_scopes);
 
-	return _globals[static_cast<int>(S)];
+	if constexpr (std::is_same<C, V>::value) {
+		_globals[static_cast<int>(S)].setData(std::move(data));
+	} else {
+		std::vector<V> data_conv;
+		data_conv.resize(data.size());
+		for (int i = 0; i < data.size(); i++)
+			data_conv = static_cast<V>(data[i]);
+		_globals[static_cast<int>(S)].setData(std::move(data_conv));
+	}
 }
 
 template <typename T, typename V>
-template <DataScopeType S>
-inline typename Game_VectorDataStorageBase<T, V>::Data_t& Game_VectorDataStorageBase<T, V>::GetStorageForEdit() {
-	ASSERT_IS_GLOBAL_SCOPE(S, "GetStorageForEdit");
+template<DataScopeType S, typename C>
+inline std::vector<V> Game_MixedDataStorageBase<T, V>::GetData() const {
+	ASSERT_IS_GLOBAL_SCOPE(S, "GetData");
 
 	static_assert(static_cast<int>(S) < DynamicScope::count_global_scopes);
 
-	return _globals[static_cast<int>(S)];
+	if constexpr (std::is_same<C, V>::value) {
+		return _globals[static_cast<int>(S)].getData();
+	} else {
+		auto data = _globals[static_cast<int>(S)].getData();
+		auto data_conv = std::vector<C>(data.size());
+		for (int i = 0; i < data.size(); i++)
+			data[i] = static_cast<C>(data[i]);
+		return data;
+	}
 }
 
-template <typename T, typename V>
-template <DataScopeType S>
-inline const typename Game_HashMapDataStorageBase<T, V>::Data_t& Game_HashMapDataStorageBase<T, V>::GetStorage() const {
-	ASSERT_IS_GLOBAL_SCOPE(S, "GetStorage");
-
-	static_assert(static_cast<int>(S) < DynamicScope::count_global_scopes);
-
-	return _globals[static_cast<int>(S)];
-}
-
-template <typename T, typename V>
-template <DataScopeType S>
-inline typename Game_HashMapDataStorageBase<T, V>::Data_t& Game_HashMapDataStorageBase<T, V>::GetStorageForEdit() {
-	ASSERT_IS_GLOBAL_SCOPE(S, "GetStorageForEdit");
-
-	static_assert(static_cast<int>(S) < DynamicScope::count_global_scopes);
-
-	return _globals[static_cast<int>(S)];
-}
+// END Game_MixedDataStorageBase definitions
 
 Game_DataStorage_Declare_TPL
 inline Game_DataStorage_TPL::Game_DataStorage(int type)
@@ -665,9 +806,9 @@ void Game_DataStorage_TPL::PerformRangeOperation(const int first_id, const int l
 		auto& storage = this->template GetStorageForEdit<S>();
 		for (int i = std::max(1, first_id); i <= last_id; ++i) {
 			if constexpr (std::is_same<V, bool>::value) {
-				bool v = storage.vector_ref()[i - 1];
+				bool v = storage[i];
 				AssignOp(v, op(v, value()));
-				storage.vector_ref()[i - 1] = v;
+				storage[i] = v;
 			} else {
 				V& v = storage[i];
 				AssignOp(v, op(v, value()));
@@ -703,9 +844,9 @@ void Game_DataStorage_TPL::PerformRangeOperation(const int first_id, const int l
 		auto& storage = this->template GetScopedStorageForEdit<S>(true, args...);
 		for (int i = std::max(1, first_id); i <= last_id; ++i) {
 			if constexpr (std::is_same<V, bool>::value) {
-				bool v = storage.vector_ref()[i - 1];
+				bool v = storage[i];
 				AssignOp(v, op(v, value()));
-				storage.vector_ref()[i - 1] = v;
+				storage[i] = v;
 			} else {
 				V& v = storage[i];
 				AssignOp(v, op(v, value()));
@@ -866,6 +1007,7 @@ inline auto Game_DataStorage_TPL::FormatRValue(V v, const char* operandType, Dat
 	if (DynamicScope::IsMapEventScope(operandScope)) {
 		return fmt::format("{}{}[{}]{{M{},E{}}}", DynamicScope::ScopeToStr(operandScope), operandType, v, map_id, event_id);
 	}
+	return std::string();
 }
 
 Game_DataStorage_Declare_TPL
@@ -1095,7 +1237,7 @@ public:
 private:
 	void AssignOpImpl(game_bool& target, game_bool value) const;
 
-	const FrameStorage_t GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const;
+	const FrameStorage_const_t GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const;
 	FrameStorage_t GetFrameStorageForEditImpl(lcf::rpg::SaveEventExecFrame* frame);
 
 	friend class Game_DataStorage<Game_SwitchesBase, lcf::rpg::SaveScopedSwitchData, game_bool, VarStorage::eStorageMode_Vector>;
@@ -1119,7 +1261,7 @@ public:
 private:
 	void AssignOpImpl(Var_t& target, Var_t value) const;
 
-	const FrameStorage_t GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const;
+	const FrameStorage_const_t GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const;
 	FrameStorage_t GetFrameStorageForEditImpl(lcf::rpg::SaveEventExecFrame* frame);
 
 	Var_t _min = 0;
@@ -1137,12 +1279,15 @@ inline void Game_DataStorage_TPL::AssignOp(V& target, V value) const {
 }
 
 Game_DataStorage_Declare_TPL
-inline const typename Game_DataStorage_TPL::FrameStorage_t Game_DataStorage_TPL::GetFrameStorage(const lcf::rpg::SaveEventExecFrame* frame) const {
+inline const typename Game_DataStorage_TPL::FrameStorage_const_t Game_DataStorage_TPL::GetFrameStorage(const lcf::rpg::SaveEventExecFrame* frame) const {
 	return reinterpret_cast<const D&>(*this).GetFrameStorage(frame);
 }
 
 Game_DataStorage_Declare_TPL
 inline typename Game_DataStorage_TPL::FrameStorage_t Game_DataStorage_TPL::GetFrameStorageForEdit(lcf::rpg::SaveEventExecFrame* frame) {
+#ifndef SCOPEDVARS_LIBLCF_STUB
+	frame->easyrpg_framevars_in_use = true;
+#endif
 	return reinterpret_cast<D&>(*this).GetFrameStorageForEdit(frame);
 }
 

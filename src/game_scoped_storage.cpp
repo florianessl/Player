@@ -43,9 +43,9 @@ SCOPED_IMPL V Game_DataStorage_TPL::PerformOperation(const int id, const V value
 		storage.prepare(id, id);
 
 		if constexpr (std::is_same<V, bool>::value) {
-			bool v = storage.vector_ref()[id - 1];
+			bool v = storage[id];
 			AssignOp(v, op(v, value));
-			storage.vector_ref()[id - 1] = v;
+			storage[id] = v;
 			return v;
 		} else {
 			V& v = storage[id];
@@ -101,9 +101,9 @@ SCOPED_IMPL V Game_DataStorage_TPL::PerformOperation(const int id, const V value
 		storage.flags[id - 1] |= ScopedDataStorage_t::eFlag_ValueDefined;
 
 		if constexpr (std::is_same<V, bool>::value) {
-			bool v = storage.vector_ref()[id - 1];
+			bool v = storage[id];
 			AssignOp(v, op(v, value));
-			storage.vector_ref()[id - 1] = v;
+			storage[id] = v;
 			return v;
 		} else {
 			V& v = storage[id];
@@ -152,7 +152,7 @@ SCOPED_IMPL void Game_DataStorage_TPL::PrepareRange(const int first_id, const in
 
 			for (int i = prepare_first_id; i <= prepare_last_id; i++) {
 				storage.flags[i - 1] = scopedInitFlags(S, i);
-				storage.vector_ref()[i - 1] = scopedGetDefaultValue(S, i);
+				storage[i] = scopedGetDefaultValue(S, i);
 			}
 		}
 	}
@@ -474,7 +474,7 @@ void Game_DataStorage_TPL::scopedClearValue(int id, int map_id, int event_id) {
 	}
 
 	storage.flags[id - 1] &= ~ScopedDataStorage_t::eFlag_ValueDefined;
-	storage.vector_ref()[id - 1] = _defaultValue;
+	storage[id] = _defaultValue;
 }
 
 Game_DataStorage_Declare_TPL
@@ -492,7 +492,7 @@ void Game_DataStorage_TPL::scopedResetTemporaryData(int map_id, int event_id) {
 			continue;
 		if ((it->second & ScopedDataStorage_t::eFlag_AutoReset) == 0)
 			continue;
-		storage.vector_ref()[it->first] = scopedGetDefaultValue(S, it->first);
+		storage[it->first + 1] = scopedGetDefaultValue(S, it->first);
 	}
 }
 

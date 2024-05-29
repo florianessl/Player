@@ -222,15 +222,15 @@ void Window_VarList::UpdateList(int first_value){
 					case eFrameSwitch:
 						ss << Main_Data::game_switches->GetName(id, eDataScope_Frame);
 #ifndef SCOPEDVARS_LIBLCF_STUB
-						carry_out = check_carry_flag(this->frame.easyrpg_frame_switches_carry_flags_out);
-						carry_in = check_carry_flag(this->frame.easyrpg_frame_switches_carry_flags_in);
+						carry_out = check_carry_flag(this->frame->easyrpg_frame_switches_carry_flags_out);
+						carry_in = check_carry_flag(this->frame->easyrpg_frame_switches_carry_flags_in);
 #endif
 						break;
 					case eFrameVariable:
 						ss << Main_Data::game_variables->GetName(id, eDataScope_Frame);
 #ifndef SCOPEDVARS_LIBLCF_STUB
-						carry_out = check_carry_flag(this->frame.easyrpg_frame_variables_carry_flags_out);
-						carry_in = check_carry_flag(this->frame.easyrpg_frame_variables_carry_flags_in);
+						carry_out = check_carry_flag(this->frame->easyrpg_frame_variables_carry_flags_out);
+						carry_in = check_carry_flag(this->frame->easyrpg_frame_variables_carry_flags_in);
 #endif
 						break;
 				}

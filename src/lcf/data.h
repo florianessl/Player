@@ -7,7 +7,7 @@
  * file that was distributed with this source code.
  */
 
-#define SCOPEDVARS_LIBLCF_STUB 1
+#define SCOPEDVARS_LIBLCF_STUB
 
 #ifndef LCF_DATA_H
 #define LCF_DATA_H

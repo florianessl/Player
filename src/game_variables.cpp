@@ -229,9 +229,9 @@ lcf::rpg::SaveScopedVariableData Game_Variables::scopedCreateSaveElement(DataSco
 	return result;
 }
 
-const typename Game_VariablesBase::FrameStorage_t Game_VariablesBase::GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const {
+const typename Game_VariablesBase::FrameStorage_const_t Game_VariablesBase::GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const {
 #ifndef SCOPEDVARS_LIBLCF_STUB
-	return return std::tie(frame->easyrpg_frame_variables, frame->easyrpg_frame_variables_carry_flags_in, frame->easyrpg_frame_variables_carry_flags_out);
+	return std::tie(frame->easyrpg_frame_variables, frame->easyrpg_frame_variables_carry_flags_in, frame->easyrpg_frame_variables_carry_flags_out);
 #else
 	static std::vector<int32_t> vec;
 	static std::vector<uint32_t> carry_flags_in, carry_flags_out;
@@ -241,7 +241,7 @@ const typename Game_VariablesBase::FrameStorage_t Game_VariablesBase::GetFrameSt
 
 typename Game_VariablesBase::FrameStorage_t Game_VariablesBase::GetFrameStorageForEditImpl(lcf::rpg::SaveEventExecFrame* frame) {
 #ifndef SCOPEDVARS_LIBLCF_STUB
-	return return std::tie(frame->easyrpg_frame_variables, frame->easyrpg_frame_variables_carry_flags_in, frame->easyrpg_frame_variables_carry_flags_out);
+	return std::tie(frame->easyrpg_frame_variables, frame->easyrpg_frame_variables_carry_flags_in, frame->easyrpg_frame_variables_carry_flags_out);
 #else
 	static std::vector<int32_t> vec;
 	static std::vector<uint32_t> carry_flags_in, carry_flags_out;
@@ -627,10 +627,12 @@ void Game_Variables::SortRange(int first_id, int last_id, bool asc) {
 		--_warnings;
 	}
 	auto& vv = GetStorageForEdit();
-	int i = std::max(0, first_id - 1);
+	int i = std::max(1, first_id);
 	if (i < last_id) {
+		vv.prepare_iterate(i, last_id);
+
 		auto sorter = [&](auto&& fn) {
-			std::stable_sort(vv.vector_ref().begin() + i, vv.vector_ref().begin() + last_id, fn);
+			std::stable_sort(vv.begin() + i, vv.begin() + last_id + 1, fn);
 		};
 		if (asc) {
 			sorter(std::less<>());
@@ -646,19 +648,19 @@ void Game_Variables::ShuffleRange(int first_id, int last_id) {
 		--_warnings;
 	}
 	auto& vv = GetStorageForEdit();
-	for (int i = std::max(0, first_id - 1); i < last_id; ++i) {
+	for (int i = std::max(1, first_id); i <= last_id; ++i) {
 		int rnd_num = Rand::GetRandomNumber(first_id, last_id) - 1;
-		std::swap(vv.vector_ref()[i], vv.vector_ref()[rnd_num]);
+		std::swap(vv[i], vv[rnd_num]);
 	}
 }
 
 template <typename F>
 void Game_Variables::WriteArray(const int first_id_a, const int last_id_a, const int first_id_b, F&& op) {
 	auto& vv = GetStorageForEdit();
-	int out_b = std::max(0, first_id_b - 1);
-	for (int i = std::max(0, first_id_a - 1); i < last_id_a; ++i) {
-		auto& v_a = vv.vector_ref()[i];
-		auto v_b = vv.vector_ref()[out_b++];
+	int out_b = std::max(1, first_id_b);
+	for (int i = std::max(1, first_id_a); i <= last_id_a; ++i) {
+		auto& v_a = vv[i];
+		auto v_b = vv[out_b++];
 		v_a = Utils::Clamp(op(v_a, v_b), GetMinValue(), GetMaxValue());
 	}
 }
@@ -672,11 +674,11 @@ void Game_Variables::SetArray(int first_id_a, int last_id_a, int first_id_b) {
 	} else {
 		auto& vv = GetStorageForEdit();
 		const int steps = std::max(0, last_id_a - first_id_a + 1);
-		int out_b = std::max(0, first_id_b + steps - 2);
-		int out_a = std::max(0, last_id_a - 1);
+		int out_b = std::max(1, first_id_b + steps - 1);
+		int out_a = std::max(1, last_id_a);
 		for (int i = 0; i < steps; ++i) {
-			auto& v_a = vv.vector_ref()[out_a--];
-			auto v_b = vv.vector_ref()[out_b--];
+			auto& v_a = vv[out_a--];
+			auto v_b = vv[out_b--];
 			v_a = Utils::Clamp(VarSet(v_a, v_b), GetMinValue(), GetMaxValue());
 		}
 	}
@@ -748,10 +750,10 @@ void Game_Variables::SwapArray(int first_id_a, int last_id_a, int first_id_b) {
 	PrepareArray(first_id_a, last_id_a, first_id_b, "Invalid write var[{},{}] <-> var[{},{}]!");
 	auto& vv = GetStorageForEdit();
 	const int steps = std::max(0, last_id_a - first_id_a + 1);
-	int out_b = std::max(0, first_id_b + steps - 2);
-	int out_a = std::max(0, last_id_a - 1);
+	int out_b = std::max(1, first_id_b + steps - 1);
+	int out_a = std::max(1, last_id_a);
 	for (int i = 0; i < steps; ++i) {
-		std::swap(vv.vector_ref()[out_a--], vv.vector_ref()[out_b--]);
+		std::swap(vv[out_a--], vv[out_b--]);
 	}
 }
 

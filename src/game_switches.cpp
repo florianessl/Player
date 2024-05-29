@@ -115,9 +115,9 @@ lcf::rpg::SaveScopedSwitchData Game_Switches::scopedCreateSaveElement(DataScopeT
 	return result;
 }
 
-typename const Game_SwitchesBase::FrameStorage_t Game_SwitchesBase::GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const {
+typename const Game_SwitchesBase::FrameStorage_const_t Game_SwitchesBase::GetFrameStorageImpl(const lcf::rpg::SaveEventExecFrame* frame) const {
 #ifndef SCOPEDVARS_LIBLCF_STUB
-	return return std::tie(frame->easyrpg_frame_switches, frame->easyrpg_frame_switches_carry_flags_in, frame->easyrpg_frame_switches_carry_flags_out);
+	return std::tie(frame->easyrpg_frame_switches, frame->easyrpg_frame_switches_carry_flags_in, frame->easyrpg_frame_switches_carry_flags_out);
 #else
 	static std::vector<game_bool> vec;
 	static std::vector<uint32_t> carry_flags_in, carry_flags_out;
@@ -127,7 +127,7 @@ typename const Game_SwitchesBase::FrameStorage_t Game_SwitchesBase::GetFrameStor
 
 typename Game_SwitchesBase::FrameStorage_t Game_SwitchesBase::GetFrameStorageForEditImpl(lcf::rpg::SaveEventExecFrame* frame) {
 #ifndef SCOPEDVARS_LIBLCF_STUB
-	return return std::tie(frame->easyrpg_frame_switches, frame->easyrpg_frame_switches_carry_flags_in, frame->easyrpg_frame_switches_carry_flags_out);
+	return std::tie(frame->easyrpg_frame_switches, frame->easyrpg_frame_switches_carry_flags_in, frame->easyrpg_frame_switches_carry_flags_out);
 #else
 	static std::vector<game_bool> vec;
 	static std::vector<uint32_t> carry_flags_in, carry_flags_out;
@@ -152,8 +152,8 @@ SCOPED_IMPL game_bool Game_Switches::Flip(int id, Args... args) {
 		storage.prepare(id, id);
 
 		if constexpr (std::is_same<game_bool, bool>::value) {
-			storage.vector_ref()[id - 1].flip();
-			return (bool)storage.vector_ref()[id - 1];
+			storage[id].flip();
+			return (bool)storage[id];
 		} else {
 			game_bool& b = storage[id];
 			b = (b > 0) ? 0 : 1;
@@ -200,8 +200,8 @@ SCOPED_IMPL game_bool Game_Switches::Flip(int id, Args... args) {
 		storage.flags[id - 1] |= ScopedDataStorage_t::eFlag_ValueDefined;
 
 		if constexpr (std::is_same<game_bool, bool>::value) {
-			storage.vector_ref()[id - 1].flip();
-			return (bool)storage.vector_ref()[id - 1];
+			storage[id].flip();
+			return (bool)storage[id];
 		} else {
 			game_bool& b = storage[id];
 			b = (b > 0) ? 0 : 1;
@@ -225,7 +225,7 @@ SCOPED_IMPL void Game_Switches::FlipRange(int first_id, int last_id, Args... arg
 
 		for (int i = std::max(1, first_id); i <= last_id; ++i) {
 			if constexpr (std::is_same<game_bool, bool>::value) {
-				storage.vector_ref()[i - 1].flip();
+				storage[i].flip();
 			} else {
 				game_bool& b = storage[i];
 				b = (b > 0) ? 0 : 1;
@@ -269,7 +269,7 @@ SCOPED_IMPL void Game_Switches::FlipRange(int first_id, int last_id, Args... arg
 			storage.flags[i - 1] |= ScopedDataStorage_t::eFlag_ValueDefined;
 
 			if constexpr (std::is_same<game_bool, bool>::value) {
-				storage.vector_ref()[i - 1].flip();
+				storage[i].flip();
 			} else {
 				game_bool& b = storage[i];
 				b = (b > 0) ? 0 : 1;

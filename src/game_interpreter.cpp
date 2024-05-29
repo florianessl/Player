@@ -857,11 +857,11 @@ bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CommandControlScopedTypeOptions(com);
 #else
 		case Cmd::ConditionalBranchEx:
-			return CommandConditionalBranchEx(com);
+			return CommandEasyRpgConditionalBranchEx(com);
 		case Cmd::ControlSwitchesEx:
-			return CommandControlSwitchesEx(com);
+			return CommandEasyRpgControlSwitchesEx(com);
 		case Cmd::ControlVarsEx:
-			return CommandControlVariablesEx(com);
+			return CommandEasyRpgControlVariablesEx(com);
 		case Cmd::ControlScopedSwitches:
 			return CommandControlScopedSwitches(com);
 		case Cmd::ControlScopedVars:
@@ -874,47 +874,6 @@ bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 		default:
 			return true;
 	}
-}
-
-void Game_Interpreter::CarryOverFrameScopedVariables(bool is_pop) {
-	auto apply_carry_flags = [](std::vector<uint32_t>& flags, auto apply) {
-		for (int i = 0; i < flags.size(); i++) {
-			int mask = flags[i];
-			if (mask == 0)
-				continue;
-			for (int b = 0; b < 32; b++) {
-				if ((mask & (1 << b)) > 0) {
-					apply((i * 32) + 1 + b);
-				}
-			}
-		}
-	};
-
-	assert(_state.stack.size() > 1);
-
-#ifndef SCOPEDVARS_LIBLCF_STUB
-	if (is_pop) {
-		auto& frame_curr = _state.stack[_state.stack.size() - 1];
-		auto& frame_prev = _state.stack[_state.stack.size() - 2];
-
-		apply_carry_flags(frame_curr.easyrpg_frame_switches_carry_flags_out, [&frame_curr, &frame_prev](int id) {
-			frame_prev.easyrpg_frame_switches[i] = frame_curr.easyrpg_frame_switches[i];
-		});
-		apply_carry_flags(frame_curr.easyrpg_frame_variables_carry_flags_out, [&frame_curr, &frame_prev](int id) {
-			frame_prev.easyrpg_frame_variables[i] = frame_curr.easyrpg_frame_variables[i];
-		});
-	} else {
-		auto& frame_curr = _state.stack[_state.stack.size() - 2];
-		auto& frame_new = _state.stack[_state.stack.size() - 1];
-
-		apply_carry_flags(frame_curr.easyrpg_frame_switches_carry_flags_in, [&frame_curr, &frame_new](int id) {
-			frame_new.easyrpg_frame_switches[i] = frame_curr.easyrpg_frame_switches[i];
-		});
-		apply_carry_flags(frame_curr.easyrpg_frame_variables_carry_flags_in, [&frame_curr, &frame_new](int id) {
-			frame_new.easyrpg_frame_variables[i] = frame_curr.easyrpg_frame_variables[i];
-		});
-	}
-#endif
 }
 
 bool Game_Interpreter::OnFinishStackFrame() {
@@ -954,6 +913,53 @@ bool Game_Interpreter::OnFinishStackFrame() {
 	}
 
 	return !is_base_frame;
+}
+
+void Game_Interpreter::CarryOverFrameScopedVariables(bool is_pop) {
+	auto apply_carry_flags = [](auto& from, auto& to, std::vector<uint32_t>& flags) {
+		for (int i = 0; i < flags.size(); i++) {
+			int mask = flags[i];
+			if (mask == 0)
+				continue;
+			for (int b = 0; b < 32; b++) {
+				if ((mask & (1 << b)) > 0) {
+					int id = (i * 32) + 1 + b;
+					to.resize(id, 0);
+					to[id] = from[id];
+				}
+			}
+		}
+	};
+
+	assert(_state.stack.size() > 1);
+
+#ifndef SCOPEDVARS_LIBLCF_STUB
+	if (is_pop) {
+		auto& frame_curr = _state.stack[_state.stack.size() - 1];
+		auto& frame_prev = _state.stack[_state.stack.size() - 2];
+
+		apply_carry_flags(
+			frame_curr.easyrpg_frame_switches,
+			frame_prev.easyrpg_frame_switches,
+			frame_curr.easyrpg_frame_switches_carry_flags_out);
+		apply_carry_flags(
+			frame_curr.easyrpg_frame_variables,
+			frame_prev.easyrpg_frame_variables,
+			frame_curr.easyrpg_frame_variables_carry_flags_out);
+	} else {
+		auto& frame_curr = _state.stack[_state.stack.size() - 2];
+		auto& frame_new = _state.stack[_state.stack.size() - 1];
+
+		apply_carry_flags(
+			frame_curr.easyrpg_frame_switches,
+			frame_new.easyrpg_frame_switches,
+			frame_curr.easyrpg_frame_switches_carry_flags_out);
+		apply_carry_flags(
+			frame_curr.easyrpg_frame_variables,
+			frame_new.easyrpg_frame_variables,
+			frame_curr.easyrpg_frame_variables_carry_flags_out);
+	}
+#endif
 }
 
 std::vector<std::string> Game_Interpreter::GetChoices(int max_num_choices) {
