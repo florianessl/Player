@@ -286,10 +286,6 @@ protected:
 	bool CommandManiacCallCommand(lcf::rpg::EventCommand const& com);
 	bool CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand const& com);
 
-	int DecodeInt(lcf::DBArray<int32_t>::const_iterator& it);
-	const std::string DecodeString(lcf::DBArray<int32_t>::const_iterator& it);
-	lcf::rpg::MoveCommand DecodeMove(lcf::DBArray<int32_t>::const_iterator& it);
-
 	void SetSubcommandIndex(int indent, int idx);
 	uint8_t& ReserveSubcommandIndex(int indent);
 	int GetSubcommandIndex(int indent) const;
@@ -329,7 +325,6 @@ protected:
 		void toSave(lcf::rpg::SaveEventExecState& save) const;
 	};
 
-	bool ManiacCheckContinueLoop(int val, int val2, int type, int op) const;
 	int ManiacBitmask(int value, int mask) const;
 
 	lcf::rpg::SaveEventExecState _state;
