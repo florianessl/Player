@@ -387,7 +387,7 @@ void Game_Map::Caching::MapCache::Clear() {
 }
 
 void Game_Map::PrepareSave(lcf::rpg::Save& save) {
-	save.foreground_event_execstate = interpreter->GetState();
+	save.foreground_event_execstate = interpreter->GetSaveState();
 
 	save.airship_location = GetVehicle(Game_Vehicle::Airship)->GetSaveData();
 	save.ship_location = GetVehicle(Game_Vehicle::Ship)->GetSaveData();
