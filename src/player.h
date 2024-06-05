@@ -18,6 +18,8 @@
 #ifndef EP_PLAYER_H
 #define EP_PLAYER_H
 
+#define INTERPRETER_DEBUGGING
+
 // Headers
 #include "fileext_guesser.h"
 #include "meta.h"

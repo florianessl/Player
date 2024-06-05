@@ -89,6 +89,14 @@ void Game_Interpreter_Map::OnMapChange() {
 	for (auto& frame: _state.stack) {
 		frame.event_id = 0;
 	}
+
+	if (_state.stack.size() > 0) {
+		auto& frame = GetFrame();
+		frame.easyrpg_runtime_flags |= lcf::rpg::SaveEventExecFrame::RuntimeFlags_map_has_changed;
+	}
+#ifdef INTERPRETER_DEBUGGING
+	Debug::ParallelInterpreterStates::ApplyMapChangedFlagToBackgroundInterpreters(Game_Map::GetCommonEvents());
+#endif
 }
 
 bool Game_Interpreter_Map::RequestMainMenuScene(int subscreen_id, int actor_index, bool is_db_actor) {
@@ -779,6 +787,9 @@ bool Game_Interpreter_Map::CommandEasyRpgTriggerEventAt(lcf::rpg::EventCommand c
 	int x = ValueOrVariable(com.parameters[0], com.parameters[1]);
 	int y = ValueOrVariable(com.parameters[2], com.parameters[3]);
 
+#ifdef INTERPRETER_DEBUGGING
+	AssertCrossMapCall();
+#endif
 	Main_Data::game_player->TriggerEventAt(x, y);
 
 	return true;

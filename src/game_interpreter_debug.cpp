@@ -186,3 +186,107 @@ void Debug::AssertBlockedMoves() {
 		}
 	}
 }
+
+
+#ifdef INTERPRETER_DEBUGGING
+
+lcf::rpg::SaveEventExecFrame::DebugFlags Debug::AnalyzeStackFrame(Game_BaseInterpreterContext const& interpreter, lcf::rpg::SaveEventExecFrame const& frame, StackFrameTraverseMode traverse_mode, const int start_index) {
+	using DebugFlags = lcf::rpg::SaveEventExecFrame::DebugFlags;
+
+	uint32_t debug_flags = 0;
+
+	std::function<void(Game_BaseInterpreterContext const&, lcf::rpg::EventCommand const&, uint32_t&)> func = [](Game_BaseInterpreterContext const& interpreter, lcf::rpg::EventCommand const& com, uint32_t& debug_flags) {
+
+		static auto check_and_apply_flag = [&debug_flags](lcf::rpg::EventCommand const& com, DebugFlags flag, const Cmd* data, size_t size) {
+			if ((debug_flags & static_cast<uint32_t>(flag)) > 0)
+				return;
+			for (size_t i = 0; i < size; ++i) {
+				if (static_cast<Cmd>(com.code) == *(data + i)) {
+					debug_flags |= static_cast<uint32_t>(flag);
+					return;
+				}
+			}
+		};
+		static auto check_and_apply_flag_tuples = [&debug_flags](lcf::rpg::EventCommand const& com, DebugFlags flag, const std::tuple<Cmd, int>* data, size_t size) {
+			if ((debug_flags & static_cast<uint32_t>(flag)) > 0)
+				return;
+			for (size_t i = 0; i < size; ++i) {
+				if (static_cast<Cmd>(com.code) == std::get<0>(*(data + i))) {
+					int com_param = std::get<1>(*(data + i));
+					if (com_param < 0 || com.parameters.size() <= com_param || com.parameters[com_param] != 0) {
+						debug_flags |= static_cast<uint32_t>(flag);
+					}
+					return;
+				}
+			}
+		};
+
+		check_and_apply_flag_tuples(com,
+			DebugFlags::DebugFlags_might_yield,
+			cmds_might_yield.data(),
+			cmds_might_yield.size());
+		if (!interpreter.IsBackgroundInterpreter()) {
+			check_and_apply_flag(com,
+				DebugFlags::DebugFlags_might_yield,
+				cmds_might_yield_parallel.data(),
+				cmds_might_yield_parallel.size());
+		}
+		check_and_apply_flag(com,
+			DebugFlags::DebugFlags_might_branch,
+			cmds_might_branch.data(),
+			cmds_might_branch.size());
+		check_and_apply_flag(com,
+			DebugFlags::DebugFlags_might_push_frame,
+			cmds_might_push_frame.data(),
+			cmds_might_push_frame.size());
+		check_and_apply_flag_tuples(com,
+			DebugFlags::DebugFlags_might_push_message,
+			cmds_might_push_message.data(),
+			cmds_might_push_message.size());
+		check_and_apply_flag(com,
+			DebugFlags::DebugFlags_might_request_scene,
+			cmds_might_request_scene.data(),
+			cmds_might_request_scene.size());
+		check_and_apply_flag(com,
+			DebugFlags::DebugFlags_might_trigger_async_op,
+			cmds_might_trigger_async_op.data(),
+			cmds_might_trigger_async_op.size());
+		check_and_apply_flag(com,
+			DebugFlags::DebugFlags_might_teleport,
+			cmds_might_teleport.data(),
+			cmds_might_teleport.size());
+		check_and_apply_flag_tuples(com,
+			DebugFlags::DebugFlags_might_wait,
+			cmds_might_wait.data(),
+			cmds_might_wait.size());
+		check_and_apply_flag_tuples(com,
+			DebugFlags::DebugFlags_might_refresh,
+			cmds_might_refresh.data(),
+			cmds_might_refresh.size());
+		check_and_apply_flag(com,
+			DebugFlags::DebugFlags_might_gameover,
+			cmds_might_gameover.data(),
+			cmds_might_gameover.size());
+	};
+
+	Game_Interpreter_Shared::AnalyzeStackFrame<uint32_t>(interpreter, frame, debug_flags, func, traverse_mode, start_index);
+
+	return static_cast<DebugFlags>(debug_flags);
+}
+
+
+void Debug::ParallelInterpreterStates::ApplyMapChangedFlagToBackgroundInterpreters(std::vector<Game_CommonEvent>& common_events) {
+
+	for (auto it = common_events.begin(); it < common_events.end(); ++it) {
+		auto& ce = *it;
+		if (ce.IsWaitingBackgroundExecution(false)) {
+			auto& state = const_cast<lcf::rpg::SaveEventExecState&>(ce.interpreter->GetState());
+			auto& recent_frame = state.stack[state.stack.size() - 1];
+			if (state.stack.size() > 1 || recent_frame.current_command > 0) {
+				recent_frame.easyrpg_runtime_flags |= lcf::rpg::SaveEventExecFrame::RuntimeFlags_map_has_changed;
+			}
+		}
+	}
+}
+
+#endif

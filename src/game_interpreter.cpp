@@ -93,6 +93,15 @@ void Game_Interpreter::Clear() {
 	_state = {};
 	_keyinput = {};
 	_async_op = {};
+
+	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_warn_on_blocked_movement_main;
+	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_warn_on_blocked_movement_parallel;
+
+#ifdef INTERPRETER_DEBUGGING
+	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_warn_on_cross_map_calls;
+	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_warn_on_execution_limit;
+	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_warn_on_moveroute_while_waiting;
+#endif
 }
 
 // Is interpreter running.
@@ -124,6 +133,28 @@ void Game_Interpreter::Push(
 	frame.event_id = event_id;
 	frame.maniac_event_id = event_id;
 	frame.maniac_event_page_id = event_page_id;
+
+#ifdef INTERPRETER_DEBUGGING
+	//FIXME: This makes loading saves break for some reason..
+	//frame.easyrpg_debug_flags = Debug::AnalyzeStackFrame(*this, frame);
+
+	switch (exType) {
+		case eEx_CallEvent:
+			frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_call_event;
+			break;
+		case eEx_Eval:
+			frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_eval_command;
+			break;
+		case eEx_DebugCall:
+			frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_debug_call;
+			break;
+		case eEx_TriggerAt:
+			frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_indirect_triggered;
+			break;
+	}
+#else
+	(void)exType;
+#endif
 
 	if (_state.stack.empty() && main_flag && !Game_Battle::IsBattleRunning()) {
 		Main_Data::game_system->ClearMessageFace();
@@ -526,7 +557,12 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 		auto* frame = GetFramePtr();
 		int event_id = frame ? frame->event_id : 0;
 		// Executed Events Count exceeded (10000)
-		Output::Debug("Event {} exceeded execution limit", event_id);
+		if ((_state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_warn_on_execution_limit) > 0) {
+			Output::Warning("Event {} exceeded execution limit", event_id);
+			//TODO
+		} else {
+			Output::Debug("Event {} exceeded execution limit", event_id);
+		}
 	}
 
 	if (Game_Map::GetNeedRefresh()) {
@@ -537,15 +573,18 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 // Setup Starting Event
 void Game_Interpreter::Push(Game_Event* ev) {
 	Push(ev->GetList(), ev->GetId(), ev->WasStartedByDecisionKey(), ev->GetActivePage() ? ev->GetActivePage()->ID : 0, eEx_Normal);
+	GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_map_event;
 }
 
 void Game_Interpreter::Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key, ExecutionType exType) {
 	Push(page->event_commands, ev->GetId(), triggered_by_decision_key, page->ID, exType);
+	GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_map_event;
 }
 
 void Game_Interpreter::Push(Game_CommonEvent* ev, ExecutionType exType) {
 	Push(ev->GetList(), 0, false, 0, exType);
 	GetFrame().maniac_event_id = ev->GetIndex();
+	GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_common_event;
 }
 
 bool Game_Interpreter::CheckGameOver() {
@@ -823,6 +862,7 @@ bool Game_Interpreter::OnFinishStackFrame() {
 		// reset the index back to 0 and wait for a frame.
 		// This not only optimizes away copying event code, it's also RPG_RT compatible.
 		frame.current_command = 0;
+		frame.easyrpg_runtime_flags &= ~lcf::rpg::SaveEventExecFrame::RuntimeFlags_map_has_changed;
 	} else {
 		// If a called frame, or base frame of foreground interpreter, pop the stack.
 		_state.stack.pop_back();
@@ -1512,6 +1552,11 @@ Game_Character* Game_Interpreter::GetCharacter(int event_id) const {
 		}
 	}
 
+#ifdef INTERPRETER_DEBUGGING
+	if (event_id > 0 && event_id < Game_Character::CharPlayer) {
+		AssertCrossMapCall();
+	}
+#endif
 	Game_Character* ch = Game_Character::GetCharacter(event_id, event_id);
 	if (!ch) {
 		Output::Warning("Unknown event with id {}", event_id);
@@ -2287,6 +2332,9 @@ bool Game_Interpreter::CommandStoreEventID(lcf::rpg::EventCommand const& com) { 
 	int x = ValueOrVariable(com.parameters[0], com.parameters[1]);
 	int y = ValueOrVariable(com.parameters[0], com.parameters[2]);
 	int var_id = com.parameters[3];
+#ifdef INTERPRETER_DEBUGGING
+	AssertCrossMapCall();
+#endif
 	auto* ev = Game_Map::GetEventAt(x, y, false);
 	Main_Data::game_variables->Set(var_id, ev ? ev->GetId() : 0);
 	Game_Map::SetNeedRefreshForVarChange(var_id);
@@ -3015,6 +3063,8 @@ bool Game_Interpreter::CommandPlayerVisibility(lcf::rpg::EventCommand const& com
 
 bool Game_Interpreter::CommandMoveEvent(lcf::rpg::EventCommand const& com) { // code 11330
 	int event_id = com.parameters[0];
+
+	AssertMoveRoutePushOnWait();
 	Game_Character* event = GetCharacter(event_id);
 	if (event != NULL) {
 		// If the event is a vehicle in use, push the commands to the player instead
@@ -5026,3 +5076,50 @@ int Game_Interpreter::ManiacBitmask(int value, int mask) const {
 
 	return value;
 }
+
+
+#ifdef INTERPRETER_DEBUGGING
+
+void Game_Interpreter::AssertCrossMapCall() const {
+	if ((_state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_skip_asserts_for_curr_command) > 0) {
+		return;
+	}
+	if ((_state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_warn_on_cross_map_calls) == 0) {
+		return;
+	}
+
+	for (auto& frame : _state.stack) {
+		if ((frame.easyrpg_runtime_flags & lcf::rpg::SaveEventExecFrame::RuntimeFlags_map_has_changed) > 0) {
+			auto& current_frame = GetFrame();
+			auto& com = current_frame.commands[current_frame.current_command];
+
+			Output::Warning("{}: Trying to access map event after map change has occured during this execution context!", lcf::rpg::EventCommand::kCodeTags.tag(com.code));
+			break;
+		}
+	}
+}
+
+void Game_Interpreter::AssertMoveRoutePushOnWait() const {
+	if ((_state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_skip_asserts_for_curr_command) > 0) {
+		return;
+	}
+	if (!main_flag || (_state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_warn_on_moveroute_while_waiting) == 0) {
+		return;
+	}
+	auto& main_interpr = Game_Map::GetInterpreter();
+	if (!main_interpr.GetState().wait_movement) {
+		return;
+	}
+
+	auto& current_frame = GetFrame();
+	auto& com = current_frame.commands[current_frame.current_command];
+
+	Output::Warning("{}: Trying to push move commands while already waiting for move route to be completed!", lcf::rpg::EventCommand::kCodeTags.tag(com.code));
+	//TODO: also print event info
+
+	// points of interest:
+	// Game_Map::IsAnyMovePending, Game_Map::RemoveAllPendingMoves, Game_Map::UpdateMapEvents
+	// Game_Character::UpdateMovement, Game_Character::UpdateMoveRoute, Game_Character::BeginMoveRouteJump, Game_Character::CancelMoveRoute
+}
+
+#endif

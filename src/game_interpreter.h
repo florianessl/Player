@@ -26,6 +26,7 @@
 #include "game_character.h"
 #include "game_actor.h"
 #include "game_interpreter_shared.h"
+#include "player.h"
 #include <lcf/dbarray.h>
 #include <lcf/rpg/fwd.h>
 #include <lcf/rpg/eventcommand.h>
@@ -349,6 +350,11 @@ protected:
 	AsyncOp _async_op = {};
 
 	friend class Scene_Debug;
+#ifdef INTERPRETER_DEBUGGING
+public:
+	void AssertCrossMapCall() const;
+	void AssertMoveRoutePushOnWait() const;
+#endif
 };
 
 inline bool Game_Interpreter::IsBackgroundInterpreter() const {

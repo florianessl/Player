@@ -173,6 +173,7 @@ int Game_Interpreter_Battle::ScheduleNextPage(lcf::rpg::TroopPageCondition::Flag
 		}
 		Clear();
 		Push(page.event_commands, 0);
+		GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_battle_event;
 		executed[i] = true;
 		return i + 1;
 	}
