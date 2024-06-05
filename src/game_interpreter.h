@@ -26,6 +26,7 @@
 #include "game_character.h"
 #include "game_actor.h"
 #include "game_interpreter_shared.h"
+#include "game_interpreter_debug.h"
 #include "player.h"
 #include <lcf/dbarray.h>
 #include <lcf/rpg/fwd.h>
@@ -42,7 +43,11 @@ class PendingMessage;
 /**
  * Game_Interpreter class
  */
+#ifdef INTERPRETER_DEBUGGING
+class Game_Interpreter : public Game_BaseInterpreterContext, public Game_DebuggableInterpreterContext
+#else
 class Game_Interpreter : public Game_BaseInterpreterContext
+#endif
 {
 public:
 	using Cmd = lcf::rpg::EventCommand::Code;
@@ -352,6 +357,27 @@ protected:
 	friend class Scene_Debug;
 #ifdef INTERPRETER_DEBUGGING
 public:
+	inline bool CanHaltExecution() override {
+		return (_state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_can_halt_execution) > 0;
+	}
+	inline bool IsHalted() override {
+		return (_state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_is_halted) > 0;
+	}
+	inline void HaltExecution() override  {
+		_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_is_halted;
+		if (main_flag) {
+			Debug::is_main_halted = true;
+		}
+	}
+	inline void ResumeExecution(bool skipAssertsForCurrentCommand) override {
+		_state.easyrpg_debug_flags &= ~lcf::rpg::SaveEventExecState::DebugFlags_is_halted;
+		if (skipAssertsForCurrentCommand) {
+			_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_skip_asserts_for_curr_command;
+		}
+		if (main_flag) {
+			Debug::is_main_halted = false;
+		}
+	}
 	void AssertCrossMapCall() const;
 	void AssertMoveRoutePushOnWait() const;
 #endif

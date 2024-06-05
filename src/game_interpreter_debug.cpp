@@ -187,8 +187,50 @@ void Debug::AssertBlockedMoves() {
 	}
 }
 
-
 #ifdef INTERPRETER_DEBUGGING
+
+namespace Debug {
+	Game_DebuggableInterpreterContext* active_interpreter = nullptr;
+	bool in_execute_command = false;
+	bool is_main_halted = false;
+}
+
+void Debug::LogCallback(LogLevel lvl, std::string const& msg, LogCallbackUserData /* userdata */) {
+	if (lvl == LogLevel::Warning && active_interpreter) {
+		if (active_interpreter->CanHaltExecution()) {
+			active_interpreter->HaltExecution();
+		}
+
+		auto& state = reinterpret_cast<Game_Interpreter*>(active_interpreter)->GetState();
+		if (state.stack.size() > 0 && (state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_log_callstack_on_warnings)) {
+			auto callstack = CreateCallStack(state.stack[0].event_id, state);
+			auto& recent_frame = state.stack[state.stack.size() - 1];
+			Output::Info("Callstack (stopped at command: '{}'; most recent frame first):",
+				lcf::rpg::EventCommand::kCodeTags.tag(recent_frame.commands[recent_frame.current_command].code));
+
+			for (auto it = callstack.begin(); it < callstack.end(); ++it) {
+				auto& item = *it;
+				std::string evt_description;
+
+				if (item.is_ce) {
+					evt_description = fmt::format("CE{:04d}", item.evt_id);
+				} else if (item.page_id > 0) {
+					evt_description = fmt::format("EV{:04d}[{:02d}]", item.evt_id, item.page_id);
+				} else {
+					evt_description = fmt::format("EV{:04d}", item.evt_id);
+				}
+
+				if (!item.name.empty()) {
+					evt_description.append("(\"");
+					evt_description.append(item.name);
+					evt_description.append("\")");
+				}
+
+				Output::Info(" [{:02d}] {} {:0d}/{:0d}", item.stack_item_no, evt_description, item.cmd_current, item.cmd_count);
+			}
+		}
+	}
+}
 
 lcf::rpg::SaveEventExecFrame::DebugFlags Debug::AnalyzeStackFrame(Game_BaseInterpreterContext const& interpreter, lcf::rpg::SaveEventExecFrame const& frame, StackFrameTraverseMode traverse_mode, const int start_index) {
 	using DebugFlags = lcf::rpg::SaveEventExecFrame::DebugFlags;

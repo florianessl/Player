@@ -75,14 +75,26 @@ namespace Debug {
 
 #ifdef INTERPRETER_DEBUGGING
 
+class Game_DebuggableInterpreterContext {
+public:
+	virtual bool CanHaltExecution() = 0;
+	virtual bool IsHalted() = 0;
+	virtual void HaltExecution() = 0;
+	virtual void ResumeExecution(bool skipAssertsForCurrentCommand) = 0;
+};
+
 namespace Debug {
 	using namespace Game_Interpreter_Shared;
 	using Cmd = lcf::rpg::EventCommand::Code;
 
+	extern Game_DebuggableInterpreterContext* active_interpreter;
+	extern bool is_main_halted;
+	extern bool in_execute_command;
+
 	//TODO: special commands through Comments!
 
 	static std::array cmds_might_yield = {
-		//std::tuple { Cmd::Wait,				-1 }, 	//TODO: wait_enter flag only
+		//std::tuple { Cmd::Wait,				-1 }, 	//wait_enter flag only TODO!!
 		std::tuple { Cmd::ShowChoice,		-1 },
 		std::tuple { Cmd::EndLoop,			 0 },	// (Maniac Loop)
 		std::tuple { Cmd::OpenVideoOptions, -1 },
@@ -231,10 +243,11 @@ namespace Debug {
 		Cmd::EnemyEncounter				//Only if com.parameters[4] == 0
 	};
 
+	void LogCallback(LogLevel lvl, std::string const& msg, LogCallbackUserData userdata);
+
 	lcf::rpg::SaveEventExecFrame::DebugFlags AnalyzeStackFrame(Game_BaseInterpreterContext const& interpreter, lcf::rpg::SaveEventExecFrame const& frame, StackFrameTraverseMode traverse_mode = eStackFrameTraversal_All, const int start_index = 0);
 }
 
 #endif
-
 
 #endif

@@ -83,6 +83,7 @@
 #include "baseui.h"
 #include "game_clock.h"
 #include "message_overlay.h"
+#include "game_interpreter_debug.h"
 
 #ifdef __ANDROID__
 #include "platform/android/android.h"
@@ -212,6 +213,10 @@ void Player::Run() {
 	reset_flag = false;
 
 	Game_Clock::ResetFrame(Game_Clock::now());
+
+#ifdef INTERPRETER_DEBUGGING
+	Output::SetLogCallback(Debug::LogCallback);
+#endif
 
 	// Main loop
 #if defined(USE_LIBRETRO) || defined(EMSCRIPTEN)
@@ -357,11 +362,24 @@ void Player::Update(bool update_scene) {
 	}
 
 	if (update_scene) {
+#ifdef INTERPRETER_DEBUGGING
+		//TODO: show window_interpreter
+		if (Debug::is_main_halted) {
+			if (Input::IsSystemPressed(Input::FAST_FORWARD_A)) {
+				Game_Interpreter::GetForegroundInterpreter().ResumeExecution(true);
+			}
+		} else {
+			if (Main_Data::game_ineluki) {
+				Main_Data::game_ineluki->Update();
+			}
+			Scene::instance->Update();
+		}
+#else
 		if (Main_Data::game_ineluki) {
 			Main_Data::game_ineluki->Update();
 		}
-
 		Scene::instance->Update();
+#endif
 	}
 
 #ifdef __ANDROID__

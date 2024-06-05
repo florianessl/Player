@@ -98,6 +98,9 @@ void Game_Interpreter::Clear() {
 	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_warn_on_blocked_movement_parallel;
 
 #ifdef INTERPRETER_DEBUGGING
+	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_can_halt_execution;
+	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_log_callstack_on_warnings;
+
 	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_warn_on_cross_map_calls;
 	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_warn_on_execution_limit;
 	_state.easyrpg_debug_flags |= lcf::rpg::SaveEventExecState::DebugFlags_warn_on_moveroute_while_waiting;
@@ -403,6 +406,11 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 	if (!IsRunning()) {
 		return;
 	}
+#ifdef INTERPRETER_DEBUGGING
+	if (IsHalted()) {
+		return;
+	}
+#endif
 
 	if (Input::IsTriggered(Input::DEBUG_ABORT_EVENT) && Player::debug_flag && !Game_Battle::IsBattleRunning()) {
 		if (Game_Message::IsMessageActive()) {
@@ -414,6 +422,10 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 		EndEventProcessing();
 		return;
 	}
+
+#ifdef INTERPRETER_DEBUGGING
+	Debug::active_interpreter = this;
+#endif
 
 	for (; loop_count < loop_limit; ++loop_count) {
 		// If something is calling a menu, we're allowed to execute only 1 command per interpreter. So we pass through if loop_count == 0, and stop at 1 or greater.
@@ -531,7 +543,11 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 		if (!ExecuteCommand()) {
 			break;
 		}
-
+#ifdef INTERPRETER_DEBUGGING
+		if (IsHalted()) {
+			break;
+		}
+#endif
 		if (Game_Battle::IsBattleRunning() && Player::IsRPG2k3() && Game_Battle::CheckWin()) {
 			// Interpreter is cancelled when a win condition is fulfilled in RPG2k3 battle
 			break;
@@ -551,6 +567,9 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 		if (index_before_exec == frame->current_command) {
 			frame->current_command++;
 		}
+#ifdef INTERPRETER_DEBUGGING
+		_state.easyrpg_debug_flags &= ~lcf::rpg::SaveEventExecState::DebugFlags_skip_asserts_for_curr_command;
+#endif
 	} // for
 
 	if (loop_count > loop_limit - 1) {
@@ -568,6 +587,10 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 	if (Game_Map::GetNeedRefresh()) {
 		Game_Map::Refresh();
 	}
+
+#ifdef INTERPRETER_DEBUGGING
+	Debug::active_interpreter = nullptr;
+#endif
 }
 
 // Setup Starting Event
@@ -622,7 +645,16 @@ void Game_Interpreter::SkipToNextConditional(std::initializer_list<Cmd> codes, i
 bool Game_Interpreter::ExecuteCommand() {
 	auto& frame = GetFrame();
 	const auto& com = frame.commands[frame.current_command];
+
+#ifdef INTERPRETER_DEBUGGING
+	Debug::in_execute_command = true;
+	bool result = ExecuteCommand(com);
+	Debug::in_execute_command = false;
+
+	return result;
+#else
 	return ExecuteCommand(com);
+#endif
 }
 
 bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
