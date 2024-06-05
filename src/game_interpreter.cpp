@@ -438,6 +438,10 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 		}
 
 		if (_state.wait_movement) {
+			if ((main_flag && (_state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_warn_on_blocked_movement_main) > 0)
+				|| (!main_flag && (_state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_warn_on_blocked_movement_parallel) > 0)) {
+				Debug::AssertBlockedMoves();
+			}
 			if (Game_Map::IsAnyMovePending()) {
 				break;
 			}
