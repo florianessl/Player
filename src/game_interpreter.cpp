@@ -105,7 +105,8 @@ void Game_Interpreter::Push(
 	std::vector<lcf::rpg::EventCommand> _list,
 	int event_id,
 	bool started_by_decision_key,
-	int event_page_id
+	int event_page_id,
+	ExecutionType exType
 ) {
 	if (_list.empty()) {
 		return;
@@ -531,15 +532,16 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 
 // Setup Starting Event
 void Game_Interpreter::Push(Game_Event* ev) {
-	Push(ev->GetList(), ev->GetId(), ev->WasStartedByDecisionKey(), ev->GetActivePage() ? ev->GetActivePage()->ID : 0);
+	Push(ev->GetList(), ev->GetId(), ev->WasStartedByDecisionKey(), ev->GetActivePage() ? ev->GetActivePage()->ID : 0, eEx_Normal);
 }
 
-void Game_Interpreter::Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key) {
-	Push(page->event_commands, ev->GetId(), triggered_by_decision_key, page->ID);
+void Game_Interpreter::Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key, ExecutionType exType) {
+	Push(page->event_commands, ev->GetId(), triggered_by_decision_key, page->ID, exType);
 }
 
-void Game_Interpreter::Push(Game_CommonEvent* ev) {
-	Push(ev->GetList(), 0, false);
+void Game_Interpreter::Push(Game_CommonEvent* ev, ExecutionType exType) {
+	Push(ev->GetList(), 0, false, 0, exType);
+	GetFrame().maniac_event_id = ev->GetIndex();
 }
 
 bool Game_Interpreter::CheckGameOver() {
@@ -3842,7 +3844,7 @@ bool Game_Interpreter::CommandCallEvent(lcf::rpg::EventCommand const& com) { // 
 			return true;
 		}
 
-		Push(common_event);
+		Push(common_event, eEx_CallEvent);
 
 		return true;
 	}
@@ -3870,7 +3872,7 @@ bool Game_Interpreter::CommandCallEvent(lcf::rpg::EventCommand const& com) { // 
 		return true;
 	}
 
-	Push(page->event_commands, event->GetId(), false, page->ID);
+	Push(page->event_commands, event->GetId(), false, page->ID, eEx_CallEvent);
 
 	return true;
 }
@@ -4969,7 +4971,7 @@ bool Game_Interpreter::CommandManiacCallCommand(lcf::rpg::EventCommand const& co
 
 	// Our implementation pushes a new frame containing the command instead of invoking it directly.
 	// This is incompatible to Maniacs but has a better compatibility with our code.
-	Push({ cmd }, GetCurrentEventId(), false); //FIXME: add some new flag, so the interpreter debug view (window_interpreter) can differentiate this frame from normal ones
+	Push({ cmd }, GetCurrentEventId(), false, 0, eEx_Eval);
 
 	return true;
 }

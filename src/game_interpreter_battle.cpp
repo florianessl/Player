@@ -236,7 +236,7 @@ bool Game_Interpreter_Battle::CommandCallCommonEvent(lcf::rpg::EventCommand cons
 		return true;
 	}
 
-	Push(common_event);
+	Push(common_event, eEx_CallEvent);
 
 	return true;
 }

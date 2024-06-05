@@ -64,15 +64,24 @@ public:
 
 	void Update(bool reset_loop_count=true);
 
+	enum ExecutionType {
+		eEx_Normal,
+		eEx_CallEvent,
+		eEx_Eval,
+		eEx_DebugCall,
+		eEx_TriggerAt
+	};
+
 	void Push(
 			std::vector<lcf::rpg::EventCommand> _list,
 			int _event_id,
 			bool started_by_decision_key = false,
-			int event_page_id = 0
+			int event_page_id = 0,
+			ExecutionType exType = eEx_Normal
 	);
 	void Push(Game_Event* ev);
-	void Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key);
-	void Push(Game_CommonEvent* ev);
+	void Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key, ExecutionType exType = eEx_Normal);
+	void Push(Game_CommonEvent* ev, ExecutionType exType = eEx_Normal);
 
 	void InputButton();
 	void SetupChoices(const std::vector<std::string>& choices, int indent, PendingMessage& pm);
