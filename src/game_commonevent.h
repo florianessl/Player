@@ -21,6 +21,7 @@
 // Headers
 #include <string>
 #include <vector>
+#include "game_interpreter_debug.h"
 #include "game_interpreter_map.h"
 #include <lcf/rpg/commonevent.h>
 #include <lcf/rpg/saveeventexecstate.h>
@@ -114,6 +115,7 @@ private:
 	std::unique_ptr<Game_Interpreter_Map> interpreter;
 
 	friend class Scene_Debug;
+	friend class Debug::ParallelInterpreterStates;
 };
 
 #endif

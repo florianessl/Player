@@ -22,7 +22,9 @@
 #include <lcf/rpg/eventcommand.h>
 #include <lcf/rpg/movecommand.h>
 #include <lcf/rpg/saveeventexecframe.h>
+#include <lcf/rpg/saveeventexecstate.h>
 #include <string_view.h>
+#include "output.h"
 
 class Game_Character;
 class Game_BaseInterpreterContext;
@@ -102,6 +104,14 @@ namespace Game_Interpreter_Shared {
 	lcf::rpg::MoveCommand DecodeMove(lcf::DBArray<int32_t>::const_iterator& it);
 
 	bool ManiacCheckContinueLoop(int val, int val2, int type, int op);
+
+	enum StackFrameTraverseMode {
+		eStackFrameTraversal_All,
+		eStackFrameTraversal_OnlyCurrentState
+	};
+
+	template <typename T>
+	void AnalyzeStackFrame(Game_BaseInterpreterContext const& interpreter, lcf::rpg::SaveEventExecFrame const& frame, T& state, std::function<void(Game_BaseInterpreterContext const& , lcf::rpg::EventCommand const&, T&)> func, StackFrameTraverseMode traverse_mode = eStackFrameTraversal_All, const int start_index = 0);
 }
 
 inline bool Game_Interpreter_Shared::CheckOperator(int val, int val2, int op) {
@@ -140,10 +150,42 @@ inline bool Game_Interpreter_Shared::ManiacCheckContinueLoop(int val, int val2, 
 	}
 }
 
+template <typename T>
+void Game_Interpreter_Shared::AnalyzeStackFrame(Game_BaseInterpreterContext const& interpreter, lcf::rpg::SaveEventExecFrame const& frame, T& state, std::function<void(Game_BaseInterpreterContext const&, lcf::rpg::EventCommand const&, T&)> func, StackFrameTraverseMode traverse_mode, const int start_index) {
+	using Cmd = lcf::rpg::EventCommand::Code;
+
+	if (start_index >= frame.commands.size())
+		return;
+
+	const auto& list = frame.commands;
+
+	for (int idx = start_index; idx < list.size(); ++idx) {
+		const auto& com = list[idx];
+
+		//TODO: not implemented yet
+		if (traverse_mode == StackFrameTraverseMode::eStackFrameTraversal_OnlyCurrentState) {
+			switch (static_cast<Cmd>(com.code)) {
+				case Cmd::ConditionalBranch:
+
+					break;
+				case Cmd::ConditionalBranch_B:
+
+					break;
+				case Cmd::Loop:
+
+					break;
+			}
+		}
+
+		func(interpreter, com, state);
+	}
+}
+
 class Game_BaseInterpreterContext {
 public:
 	virtual ~Game_BaseInterpreterContext() {}
 
+	virtual bool IsBackgroundInterpreter() const = 0;
 	virtual int GetThisEventId() const = 0;
 	virtual Game_Character* GetCharacter(int event_id) const = 0;
 	virtual const lcf::rpg::SaveEventExecFrame& GetFrame() const = 0;

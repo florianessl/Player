@@ -80,6 +80,7 @@ public:
 	bool ExecuteCommand();
 	virtual bool ExecuteCommand(lcf::rpg::EventCommand const& com);
 
+	bool IsBackgroundInterpreter() const override;
 
 	/**
 	 * Returns the interpreters current state information.
@@ -340,6 +341,10 @@ protected:
 
 	friend class Scene_Debug;
 };
+
+inline bool Game_Interpreter::IsBackgroundInterpreter() const {
+	return main_flag;
+}
 
 inline const lcf::rpg::SaveEventExecFrame* Game_Interpreter::GetFramePtr() const {
 	return !_state.stack.empty() ? &_state.stack.back() : nullptr;
