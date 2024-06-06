@@ -595,18 +595,18 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 // Setup Starting Event
 void Game_Interpreter::Push(Game_Event* ev) {
 	Push(ev->GetList(), ev->GetId(), ev->WasStartedByDecisionKey(), ev->GetActivePage() ? ev->GetActivePage()->ID : 0, eEx_Normal);
-	GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_map_event;
+	_state.easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_map_event;
 }
 
 void Game_Interpreter::Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key, ExecutionType exType) {
 	Push(page->event_commands, ev->GetId(), triggered_by_decision_key, page->ID, exType);
-	GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_map_event;
+	_state.easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_map_event;
 }
 
 void Game_Interpreter::Push(Game_CommonEvent* ev, ExecutionType exType) {
 	Push(ev->GetList(), 0, false, 0, exType);
 	GetFrame().maniac_event_id = ev->GetIndex();
-	GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_common_event;
+	_state.easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_common_event;
 }
 
 bool Game_Interpreter::CheckGameOver() {
