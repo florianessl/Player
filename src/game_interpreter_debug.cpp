@@ -52,7 +52,7 @@ Debug::ParallelInterpreterStates Debug::ParallelInterpreterStates::GetCachedStat
 }
 
 std::vector<Debug::CallStackItem> Debug::CreateCallStack(const int owner_evt_id, const lcf::rpg::SaveEventExecState& state) {
-	std::vector<CallStackItem> items(state.stack.size());
+	std::vector<CallStackItem> items;
 
 	for (int i = state.stack.size() - 1; i >= 0; i--) {
 		int evt_id = state.stack[i].event_id;
@@ -201,13 +201,22 @@ void Debug::LogCallback(LogLevel lvl, std::string const& msg, LogCallbackUserDat
 			active_interpreter->HaltExecution();
 		}
 
-		auto& state = reinterpret_cast<Game_Interpreter*>(active_interpreter)->GetState();
+		auto& state = static_cast<Game_Interpreter*>(active_interpreter)->GetState();
 		if (state.stack.size() > 0 && (state.easyrpg_debug_flags & lcf::rpg::SaveEventExecState::DebugFlags_log_callstack_on_warnings)) {
 			auto callstack = CreateCallStack(state.stack[0].event_id, state);
-			auto& recent_frame = state.stack[state.stack.size() - 1];
-			Output::Info("Callstack (stopped at command: '{}'; most recent frame first):",
-				lcf::rpg::EventCommand::kCodeTags.tag(recent_frame.commands[recent_frame.current_command].code));
 
+			auto& recent_frame = state.stack[state.stack.size() - 1];
+			if (in_execute_command) {
+				Output::Info("Callstack (stopped at command: '{}'; most recent frame first):",
+					lcf::rpg::EventCommand::kCodeTags.tag(recent_frame.commands[recent_frame.current_command].code));
+			} else if (recent_frame.current_command - 1 >= 0 && recent_frame.current_command < recent_frame.commands.size()) {
+				if (state.wait_movement) {
+					Output::Info("Callstack (waiting for movement):");
+				} else {
+					Output::Info("Callstack (stopped after command: '{}'; most recent frame first):",
+						lcf::rpg::EventCommand::kCodeTags.tag(recent_frame.commands[recent_frame.current_command - 1].code));
+				}
+			}
 			for (auto it = callstack.begin(); it < callstack.end(); ++it) {
 				auto& item = *it;
 				std::string evt_description;
