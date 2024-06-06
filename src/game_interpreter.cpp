@@ -138,8 +138,7 @@ void Game_Interpreter::Push(
 	frame.maniac_event_page_id = event_page_id;
 
 #ifdef INTERPRETER_DEBUGGING
-	//FIXME: This makes loading saves break for some reason..
-	//frame.easyrpg_debug_flags = Debug::AnalyzeStackFrame(*this, frame);
+	frame.easyrpg_debug_flags = Debug::AnalyzeStackFrame(*this, frame);
 
 	switch (exType) {
 		case eEx_CallEvent:
@@ -5148,10 +5147,6 @@ void Game_Interpreter::AssertMoveRoutePushOnWait() const {
 
 	Output::Warning("{}: Trying to push move commands while already waiting for move route to be completed!", lcf::rpg::EventCommand::kCodeTags.tag(com.code));
 	//TODO: also print event info
-
-	// points of interest:
-	// Game_Map::IsAnyMovePending, Game_Map::RemoveAllPendingMoves, Game_Map::UpdateMapEvents
-	// Game_Character::UpdateMovement, Game_Character::UpdateMoveRoute, Game_Character::BeginMoveRouteJump, Game_Character::CancelMoveRoute
 }
 
 #endif
