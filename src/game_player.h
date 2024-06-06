@@ -159,7 +159,7 @@ private:
 	void UpdateEncounterSteps();
 	bool CheckActionEvent();
 	bool CheckEventTriggerHere(TriggerSet triggers, bool triggered_by_decision_key);
-	bool CheckEventTriggerThere(TriggerSet triggers, int x, int y, bool triggered_by_decision_key);
+	bool CheckEventTriggerThere(TriggerSet triggers, int x, int y, bool triggered_by_decision_key, bool triggered_indirectly = false);
 	bool GetOnVehicle();
 	bool GetOffVehicle();
 	bool UpdateAirship();

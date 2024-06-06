@@ -427,6 +427,11 @@ bool Game_Player::CheckActionEvent() {
 	return result || got_action;
 }
 
+constexpr lcf::rpg::SaveEventExecState::EasyRpgTrigger ToEasyRpgTrigger(lcf::rpg::EventPage::Trigger trigger, bool indirect_map_call) {
+	return static_cast<lcf::rpg::SaveEventExecState::EasyRpgTrigger>(static_cast<int>(trigger)
+		| (indirect_map_call ? static_cast<int>(lcf::rpg::SaveEventExecState::EasyRpgTrigger_flag_indirect_map_call) : 0));
+}
+
 bool Game_Player::CheckEventTriggerHere(TriggerSet triggers, bool triggered_by_decision_key) {
 	if (InAirship()) {
 		return false;
@@ -443,13 +448,14 @@ bool Game_Player::CheckEventTriggerHere(TriggerSet triggers, bool triggered_by_d
 				&& trigger >= 0
 				&& triggers[trigger]) {
 			SetEncounterCalling(false);
-			result |= ev.ScheduleForegroundExecution(triggered_by_decision_key, true);
+			result |= ev.ScheduleForegroundExecution(triggered_by_decision_key, true,
+				ToEasyRpgTrigger(trigger, false));
 		}
 	}
 	return result;
 }
 
-bool Game_Player::CheckEventTriggerThere(TriggerSet triggers, int x, int y, bool triggered_by_decision_key) {
+bool Game_Player::CheckEventTriggerThere(TriggerSet triggers, int x, int y, bool triggered_by_decision_key, bool triggered_indirectly) {
 	if (InAirship()) {
 		return false;
 	}
@@ -464,7 +470,8 @@ bool Game_Player::CheckEventTriggerThere(TriggerSet triggers, int x, int y, bool
 				&& trigger >= 0
 				&& triggers[trigger]) {
 			SetEncounterCalling(false);
-			result |= ev.ScheduleForegroundExecution(triggered_by_decision_key, true);
+			result |= ev.ScheduleForegroundExecution(triggered_by_decision_key, !triggered_indirectly,
+				ToEasyRpgTrigger(trigger, triggered_indirectly));
 		}
 	}
 	return result;

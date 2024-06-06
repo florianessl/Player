@@ -131,6 +131,7 @@ void Game_Event::SetOriginalMoveRouteIndex(int new_index) {
 
 void Game_Event::ClearWaitingForegroundExecution() {
 	data()->waiting_execution = false;
+	data()->easyrpg_runtime_flags = 0;
 }
 
 static bool CompareMoveRouteCommandCodes(const lcf::rpg::MoveRoute& l, const lcf::rpg::MoveRoute& r) {
@@ -309,13 +310,17 @@ bool Game_Event::WasStartedByDecisionKey() const {
 	return data()->triggered_by_decision_key;
 }
 
+bool Game_Event::WasTriggeredIndirectly() const {
+	return (data()->easyrpg_runtime_flags & lcf::rpg::SaveEventExecState::EasyRpgTrigger_flag_indirect_map_call) > 0;
+}
+
 lcf::rpg::EventPage::Trigger Game_Event::GetTrigger() const {
 	int trigger = page ? page->trigger : -1;
 	return static_cast<lcf::rpg::EventPage::Trigger>(trigger);
 }
 
 
-bool Game_Event::ScheduleForegroundExecution(bool by_decision_key, bool face_player) {
+bool Game_Event::ScheduleForegroundExecution(bool by_decision_key, bool face_player, lcf::rpg::SaveEventExecState::EasyRpgTrigger trigger) {
 	// RPG_RT always resets this everytime this function is called, whether successful or not
 	data()->triggered_by_decision_key = by_decision_key;
 
@@ -329,6 +334,7 @@ bool Game_Event::ScheduleForegroundExecution(bool by_decision_key, bool face_pla
 	}
 
 	data()->waiting_execution = true;
+	data()->easyrpg_runtime_flags = static_cast<int32_t>(trigger);
 	SetPaused(true);
 
 	return true;
@@ -347,7 +353,7 @@ void Game_Event::OnFinishForegroundEvent() {
 
 bool Game_Event::CheckEventAutostart() {
 	if (GetTrigger() == lcf::rpg::EventPage::Trigger_auto_start) {
-		ScheduleForegroundExecution(false, false);
+		ScheduleForegroundExecution(false, false, lcf::rpg::SaveEventExecState::EasyRpgTrigger_auto_start);
 		return true;
 	}
 	return false;
@@ -361,7 +367,7 @@ bool Game_Event::CheckEventCollision() {
 			&& Main_Data::game_player->GetX() == GetX()
 			&& Main_Data::game_player->GetY() == GetY())
 	{
-		ScheduleForegroundExecution(false, true);
+		ScheduleForegroundExecution(false, true, lcf::rpg::SaveEventExecState::EasyRpgTrigger_collision);
 		SetStopCount(0);
 		return true;
 	}
@@ -381,7 +387,7 @@ void Game_Event::CheckCollisonOnMoveFailure() {
 			&& GetLayer() == lcf::rpg::EventPage::Layers_same
 			&& GetTrigger() == lcf::rpg::EventPage::Trigger_collision)
 	{
-		ScheduleForegroundExecution(false, true);
+		ScheduleForegroundExecution(false, true, lcf::rpg::SaveEventExecState::EasyRpgTrigger_collision);
 		// Events with trigger collision and layer same always reset their
 		// stop_count when they fail movement to a tile that the player inhabits.
 		SetStopCount(0);
@@ -587,6 +593,7 @@ AsyncOp Game_Event::Update(bool resume_async) {
 	// the wait will tick by 1 each time the interpreter is invoked.
 	if ((resume_async || GetTrigger() == lcf::rpg::EventPage::Trigger_parallel) && interpreter) {
 		if (!interpreter->IsRunning() && page && !page->event_commands.empty()) {
+			this->data()->easyrpg_runtime_flags = static_cast<int32_t>(lcf::rpg::SaveEventExecState::EasyRpgTrigger_parallel);
 			interpreter->Push(this);
 		}
 		interpreter->Update(!resume_async);

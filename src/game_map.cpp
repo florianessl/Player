@@ -1443,7 +1443,7 @@ static void OnEncounterEnd(BattleResult result) {
 	auto* ce = lcf::ReaderUtil::GetElement(common_events, Game_Battle::GetDeathHandlerCommonEvent());
 	if (ce) {
 		auto& interp = Game_Map::GetInterpreter();
-		interp.Push(ce);
+		interp.Push(ce, Game_Interpreter::ePush_CallEvent);
 	}
 
 	auto tt = Game_Battle::GetDeathHandlerTeleport();

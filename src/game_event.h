@@ -89,6 +89,8 @@ public:
 	 */
 	bool WasStartedByDecisionKey() const;
 
+	bool WasTriggeredIndirectly() const;
+
 	/**
 	 * Gets trigger condition.
 	 *
@@ -116,7 +118,7 @@ public:
 	 *
 	 * @return true if event was scheduled.
 	 */
-	bool ScheduleForegroundExecution(bool triggered_by_decision_key, bool face_player);
+	bool ScheduleForegroundExecution(bool triggered_by_decision_key, bool face_player, lcf::rpg::SaveEventExecState::EasyRpgTrigger trigger);
 
 	/**
 	 * Update this for the current frame
@@ -160,6 +162,8 @@ public:
 
 	/** @returns the number of pages this event has */
 	int GetNumPages() const;
+
+	lcf::rpg::SaveEventExecState::EasyRpgTrigger GetEasyRpgTrigger() const;
 
 protected:
 	/** Check for and fix incorrect data after loading save game */
@@ -224,6 +228,10 @@ inline int Game_Event::GetNumPages() const {
 
 inline bool Game_Event::IsVisible() const {
 	return GetActivePage() != nullptr && Game_Character::IsVisible();
+}
+
+inline lcf::rpg::SaveEventExecState::EasyRpgTrigger Game_Event::GetEasyRpgTrigger() const {
+	return static_cast<lcf::rpg::SaveEventExecState::EasyRpgTrigger>(data()->easyrpg_runtime_flags & lcf::rpg::SaveEventExecState::EasyRpgTrigger_bitmask_type);
 }
 
 #endif

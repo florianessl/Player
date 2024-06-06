@@ -116,9 +116,10 @@ bool Game_Interpreter::IsRunning() const {
 void Game_Interpreter::Push(
 	std::vector<lcf::rpg::EventCommand> _list,
 	int event_id,
-	bool started_by_decision_key,
 	int event_page_id,
-	ExecutionType exType
+	bool started_by_decision_key,
+	lcf::rpg::SaveEventExecState::EasyRpgTrigger trigger,
+	PushType pushType
 ) {
 	if (_list.empty()) {
 		return;
@@ -140,28 +141,40 @@ void Game_Interpreter::Push(
 #ifdef INTERPRETER_DEBUGGING
 	frame.easyrpg_debug_flags = Debug::AnalyzeStackFrame(*this, frame);
 
-	switch (exType) {
-		case eEx_CallEvent:
-			frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_call_event;
-			break;
-		case eEx_Eval:
-			frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_eval_command;
-			break;
-		case eEx_DebugCall:
-			frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_debug_call;
-			break;
-		case eEx_TriggerAt:
-			frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_indirect_triggered;
-			break;
+
+	if (!_state.stack.empty()) {
+		assert(pushType != ePush_None);
+
+		switch (pushType) {
+			case ePush_CallEvent:
+				frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_call_event;
+				break;
+			case ePush_Eval:
+				frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_eval_command;
+				break;
+			case ePush_Debug:
+				frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_debug_push;
+				break;
+			case ePush_IndirectMapCall:
+				frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_indirect_map_call;
+				break;
+		}
+	} else {
+		assert(pushType == ePush_None || pushType == ePush_Debug);
+		if (pushType == ePush_Debug) {
+			frame.easyrpg_debug_flags |= lcf::rpg::SaveEventExecFrame::DebugFlags_is_debug_push;
+		}
 	}
 #else
-	(void)exType;
+	(void)pushType;
 #endif
 
 	if (_state.stack.empty() && main_flag && !Game_Battle::IsBattleRunning()) {
 		Main_Data::game_system->ClearMessageFace();
 		Main_Data::game_player->SetMenuCalling(false);
 		Main_Data::game_player->SetEncounterCalling(false);
+
+		_state.easyrpg_runtime_flags |= static_cast<int>(trigger);
 	}
 
 	_state.stack.push_back(std::move(frame));
@@ -593,20 +606,49 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 }
 
 // Setup Starting Event
-void Game_Interpreter::Push(Game_Event* ev) {
-	Push(ev->GetList(), ev->GetId(), ev->WasStartedByDecisionKey(), ev->GetActivePage() ? ev->GetActivePage()->ID : 0, eEx_Normal);
-	_state.easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_map_event;
+void Game_Interpreter::Push(Game_Event* ev, PushType pushType) {
+#ifdef INTERPRETER_DEBUGGING
+	assert(_state.stack.empty());
+#endif
+	Push(ev->GetList(), ev->GetId(), ev->GetActivePage() ? ev->GetActivePage()->ID : 0,
+		ev->WasStartedByDecisionKey(), ev->GetEasyRpgTrigger(), pushType);
+	GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecFrame::RuntimeFlags_map_event;
 }
 
-void Game_Interpreter::Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key, ExecutionType exType) {
-	Push(page->event_commands, ev->GetId(), triggered_by_decision_key, page->ID, exType);
-	_state.easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_map_event;
+void Game_Interpreter::Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key, PushType pushType) {
+#ifdef INTERPRETER_DEBUGGING
+	assert(_state.stack.empty());
+#endif
+	Push(page->event_commands, ev->GetId(), page->ID, triggered_by_decision_key, ev->GetEasyRpgTrigger(), pushType);
+	GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecFrame::RuntimeFlags_map_event;
 }
 
-void Game_Interpreter::Push(Game_CommonEvent* ev, ExecutionType exType) {
-	Push(ev->GetList(), 0, false, 0, exType);
+void Game_Interpreter::Push(Game_CommonEvent* ev, PushType pushType) {
+	auto easyrpg_trigger_type = lcf::rpg::SaveEventExecState::EasyRpgTrigger_called;
+
+	if (pushType == ePush_None) {
+		switch (ev->GetTrigger()) {
+			case lcf::rpg::CommonEvent::Trigger_automatic:
+				easyrpg_trigger_type = lcf::rpg::SaveEventExecState::EasyRpgTrigger_auto_start;
+				break;
+			case lcf::rpg::CommonEvent::Trigger_parallel:
+				easyrpg_trigger_type = lcf::rpg::SaveEventExecState::EasyRpgTrigger_parallel;
+				break;
+			case lcf::rpg::CommonEvent::Trigger_map_init_deferred:
+				easyrpg_trigger_type = lcf::rpg::SaveEventExecState::EasyRpgTrigger_map_init_deferred;
+				break;
+			case lcf::rpg::CommonEvent::Trigger_map_init_immediate:
+				easyrpg_trigger_type = lcf::rpg::SaveEventExecState::EasyRpgTrigger_map_init_immediate;
+				break;
+			case lcf::rpg::CommonEvent::Trigger_call:
+			default:
+				easyrpg_trigger_type = lcf::rpg::SaveEventExecState::EasyRpgTrigger_called;
+				break;
+		}
+	}
+	Push(ev->GetList(), 0, false, 0, easyrpg_trigger_type, pushType);
 	GetFrame().maniac_event_id = ev->GetIndex();
-	_state.easyrpg_runtime_flags |= lcf::rpg::SaveEventExecState::RuntimeFlags_common_event;
+	GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecFrame::RuntimeFlags_common_event;
 }
 
 bool Game_Interpreter::CheckGameOver() {
@@ -3929,7 +3971,7 @@ bool Game_Interpreter::CommandCallEvent(lcf::rpg::EventCommand const& com) { // 
 			return true;
 		}
 
-		Push(common_event, eEx_CallEvent);
+		Push(common_event, ePush_CallEvent);
 
 		return true;
 	}
@@ -3957,7 +3999,7 @@ bool Game_Interpreter::CommandCallEvent(lcf::rpg::EventCommand const& com) { // 
 		return true;
 	}
 
-	Push(page->event_commands, event->GetId(), false, page->ID, eEx_CallEvent);
+	Push(page->event_commands, event->GetId(), false, page->ID, lcf::rpg::SaveEventExecState::EasyRpgTrigger_called, ePush_CallEvent);
 
 	return true;
 }
@@ -5056,7 +5098,7 @@ bool Game_Interpreter::CommandManiacCallCommand(lcf::rpg::EventCommand const& co
 
 	// Our implementation pushes a new frame containing the command instead of invoking it directly.
 	// This is incompatible to Maniacs but has a better compatibility with our code.
-	Push({ cmd }, GetCurrentEventId(), false, 0, eEx_Eval);
+	Push({ cmd }, GetCurrentEventId(), false, 0, lcf::rpg::SaveEventExecState::EasyRpgTrigger_called, ePush_Eval);
 
 	return true;
 }
