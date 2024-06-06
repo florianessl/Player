@@ -119,7 +119,7 @@ std::string Debug::FormatEventName(Game_Character const& ch) {
 void Debug::AssertBlockedMoves() {
 	auto check = [](Game_Character& ev) {
 		return ev.IsMoveRouteOverwritten() && !ev.IsMoveRouteFinished()
-			&& ev.IsStopping() && ev.GetStopCount() > ev.GetMaxStopCount();
+			&& ev.GetStopCount() != 0xFFFF && ev.GetStopCount() > ev.GetMaxStopCount();
 	};
 	auto assert_way = [](Game_Character& ev) {
 		using Code = lcf::rpg::MoveCommand::Code;
