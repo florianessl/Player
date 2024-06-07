@@ -116,6 +116,29 @@ std::string Debug::FormatEventName(Game_Character const& ch) {
 	return "";
 }
 
+std::string Debug::FormatEventName(Game_CommonEvent const& ev) {
+	if (ev.GetName().empty()) {
+		return fmt::format("CE{:04d}", ev.GetIndex());
+	}
+	return fmt::format("CE{:04d} '{}'", ev.GetIndex(), ev.GetName());
+}
+
+std::string Debug::FormatEventName(lcf::rpg::SaveEventExecFrame const* frame) {
+	if (frame == nullptr) {
+		return "Event";
+	}
+	if ((frame->easyrpg_runtime_flags & lcf::rpg::SaveEventExecFrame::RuntimeFlags_map_event) > 0) {
+		return fmt::format("EV{:04d}", frame->maniac_event_id);
+	}
+	if ((frame->easyrpg_runtime_flags & lcf::rpg::SaveEventExecFrame::RuntimeFlags_common_event) > 0) {
+		return fmt::format("CE{:04d}", frame->maniac_event_id);
+	}
+	if ((frame->easyrpg_runtime_flags & lcf::rpg::SaveEventExecFrame::RuntimeFlags_battle_event) > 0) {
+		return fmt::format("BattlePage {}", frame->maniac_event_page_id);
+	}
+	return "Event";
+}
+
 void Debug::AssertBlockedMoves() {
 	auto check = [](Game_Character& ev) {
 		return ev.IsMoveRouteOverwritten() && !ev.IsMoveRouteFinished()

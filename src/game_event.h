@@ -118,7 +118,7 @@ public:
 	 *
 	 * @return true if event was scheduled.
 	 */
-	bool ScheduleForegroundExecution(bool triggered_by_decision_key, bool face_player, lcf::rpg::SaveEventExecState::EasyRpgTrigger trigger);
+	bool ScheduleForegroundExecution(bool triggered_by_decision_key, bool face_player, Debug::EasyRpgTrigger trigger);
 
 	/**
 	 * Update this for the current frame
@@ -163,7 +163,7 @@ public:
 	/** @returns the number of pages this event has */
 	int GetNumPages() const;
 
-	lcf::rpg::SaveEventExecState::EasyRpgTrigger GetEasyRpgTrigger() const;
+	Debug::EasyRpgTrigger GetEasyRpgTrigger() const;
 
 protected:
 	/** Check for and fix incorrect data after loading save game */
@@ -230,8 +230,8 @@ inline bool Game_Event::IsVisible() const {
 	return GetActivePage() != nullptr && Game_Character::IsVisible();
 }
 
-inline lcf::rpg::SaveEventExecState::EasyRpgTrigger Game_Event::GetEasyRpgTrigger() const {
-	return static_cast<lcf::rpg::SaveEventExecState::EasyRpgTrigger>(data()->easyrpg_runtime_flags & lcf::rpg::SaveEventExecState::EasyRpgTrigger_bitmask_type);
+inline Debug::EasyRpgTrigger Game_Event::GetEasyRpgTrigger() const {
+	return static_cast<Debug::EasyRpgTrigger>(data()->easyrpg_runtime_flags & Debug::eTrigger_bitmask_type);
 }
 
 #endif

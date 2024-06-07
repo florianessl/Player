@@ -70,25 +70,28 @@ public:
 
 	void Update(bool reset_loop_count=true);
 
-	enum PushType {
-		ePush_None = 0,
-		ePush_CallEvent = 1,
-		ePush_Eval,
-		ePush_Debug,
-		ePush_IndirectMapCall
-	};
-
 	void Push(
 		std::vector<lcf::rpg::EventCommand> _list,
 		int _event_id,
 		int event_page_id,
 		bool started_by_decision_key,
-		lcf::rpg::SaveEventExecState::EasyRpgTrigger trigger,
-		PushType pushType = ePush_None
+		Debug::EasyRpgTrigger trigger,
+		Debug::StackFramePushType pushType = Debug::ePush_Initial
 	);
-	void Push(Game_Event* ev, PushType pushType = ePush_None);
-	void Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key, PushType pushType = ePush_None);
-	void Push(Game_CommonEvent* ev, PushType pushType = ePush_None);
+	void Push(
+		Game_Event* ev,
+		Debug::StackFramePushType pushType = Debug::ePush_Initial
+	);
+	void Push(
+		Game_Event* ev,
+		const lcf::rpg::EventPage* page,
+		bool triggered_by_decision_key,
+		Debug::StackFramePushType pushType = Debug::ePush_Initial
+	);
+	void Push(
+		Game_CommonEvent* ev,
+		Debug::StackFramePushType pushType = Debug::ePush_Initial
+	);
 
 	void InputButton();
 	void SetupChoices(const std::vector<std::string>& choices, int indent, PendingMessage& pm);

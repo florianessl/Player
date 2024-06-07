@@ -172,7 +172,8 @@ int Game_Interpreter_Battle::ScheduleNextPage(lcf::rpg::TroopPageCondition::Flag
 			continue;
 		}
 		Clear();
-		Push(page.event_commands, 0, 0, false, lcf::rpg::SaveEventExecState::EasyRpgTrigger_called);
+		Push(page.event_commands, 0, 0, false, Debug::eTrigger_called);
+		GetFrame().maniac_event_page_id = static_cast<int32_t>(i);
 		GetFrame().easyrpg_runtime_flags |= lcf::rpg::SaveEventExecFrame::RuntimeFlags_battle_event;
 		executed[i] = true;
 		return i + 1;
@@ -237,7 +238,7 @@ bool Game_Interpreter_Battle::CommandCallCommonEvent(lcf::rpg::EventCommand cons
 		return true;
 	}
 
-	Push(common_event, ePush_CallEvent);
+	Push(common_event, Debug::ePush_CallEvent);
 
 	return true;
 }

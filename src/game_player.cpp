@@ -427,9 +427,9 @@ bool Game_Player::CheckActionEvent() {
 	return result || got_action;
 }
 
-constexpr lcf::rpg::SaveEventExecState::EasyRpgTrigger ToEasyRpgTrigger(lcf::rpg::EventPage::Trigger trigger, bool indirect_map_call) {
-	return static_cast<lcf::rpg::SaveEventExecState::EasyRpgTrigger>(static_cast<int>(trigger)
-		| (indirect_map_call ? static_cast<int>(lcf::rpg::SaveEventExecState::EasyRpgTrigger_flag_indirect_map_call) : 0));
+constexpr Debug::EasyRpgTrigger ToEasyRpgTrigger(lcf::rpg::EventPage::Trigger trigger, bool indirect_map_call) {
+	return static_cast<Debug::EasyRpgTrigger>(static_cast<int>(trigger)
+		| (indirect_map_call ? static_cast<int>(Debug::eTrigger_flag_indirect_map_call) : 0));
 }
 
 bool Game_Player::CheckEventTriggerHere(TriggerSet triggers, bool triggered_by_decision_key) {

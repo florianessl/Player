@@ -26,6 +26,29 @@
 class Game_CommonEvent;
 
 namespace Debug {
+	enum EasyRpgTrigger : uint8_t {
+		eTrigger_action = 0,
+		eTrigger_touched,
+		eTrigger_collision,
+		eTrigger_auto_start,
+		eTrigger_parallel,
+		eTrigger_called,
+		eTrigger_battle_start,
+		eTrigger_battle_parallel,
+		eTrigger_map_init_deferred,
+		eTrigger_map_init_immediate,
+		eTrigger_bitmask_type = 63,
+		eTrigger_flag_indirect_map_call = 64
+	};
+
+	enum StackFramePushType {
+		ePush_Initial = 0,
+		ePush_CallEvent,
+		ePush_DeathHandler,
+		ePush_Eval,
+		ePush_Debug
+	};
+
 	class ParallelInterpreterStates {
 	private:
 		std::vector<int> ev_ids;
@@ -68,7 +91,9 @@ namespace Debug {
 
 	std::vector<CallStackItem> CreateCallStack(const int owner_evt_id, const lcf::rpg::SaveEventExecState& state);
 
-	std::string FormatEventName(Game_Character const& ev);
+	std::string FormatEventName(Game_Character const& ch);
+	std::string FormatEventName(Game_CommonEvent const& ev);
+	std::string FormatEventName(lcf::rpg::SaveEventExecFrame const* frame);
 
 	void AssertBlockedMoves();
 }
