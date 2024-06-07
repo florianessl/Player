@@ -95,7 +95,7 @@ namespace Debug {
 	std::string FormatEventName(Game_CommonEvent const& ev);
 	std::string FormatEventName(lcf::rpg::SaveEventExecFrame const* frame);
 
-	void AssertBlockedMoves();
+	void AssertBlockedMoves(bool main_flag);
 }
 
 #ifdef INTERPRETER_DEBUGGING
