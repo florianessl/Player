@@ -738,7 +738,7 @@ static bool WouldCollide(const Game_Character& self, const T& other, bool self_c
 			}
 		}
 		if constexpr (impl == Game_Map::eImpl_AssertWayForeground || impl == Game_Map::eImpl_AssertWayBackground) {
-			constexpr auto rng_moves = {
+			const auto rng_moves = {
 				lcf::rpg::EventPage::MoveType_random,
 				lcf::rpg::EventPage::MoveType_toward,
 				lcf::rpg::EventPage::MoveType_away
@@ -822,6 +822,8 @@ static bool WouldCollide(const Game_Character& self, const T& other, bool self_c
 						} else {
 							move_success = other.CheckMove(other.GetDirectionAwayCharacter(*Main_Data::game_player));
 						}
+						break;
+					default:
 						break;
 				}
 				if (move_success) {
