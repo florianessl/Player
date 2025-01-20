@@ -5349,6 +5349,12 @@ bool Game_Interpreter::CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand c
 		Player::game_config.patch_rpg2k3_commands.Set(flag_value);
 	if (flag_name == "rpg2k-battle")
 		lcf::Data::system.easyrpg_use_rpg2k_battle_system = flag_value;
+#ifndef LIBLCF_STUB_COMSTRING_VARSUBSTITUTION
+	if (flag_name == "var-substitution-fmt")
+		lcf::Data::system.easyrpg_var_substitution_formatting = flag_value;
+	if (flag_name == "var-substitution-for-cmds")
+		lcf::Data::system.easyrpg_var_substitution_in_commands = flag_value;
+#endif
 
 	return true;
 }
