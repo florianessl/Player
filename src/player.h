@@ -25,9 +25,13 @@
 #include "game_clock.h"
 #include "game_config.h"
 #include "game_config_game.h"
+#include "game_interpreter_shared.h"
 #include <vector>
 #include <memory>
 #include <cstdint>
+#include <optional>
+
+#define ENABLE_DYNAMIC_INTERPRETER_CONFIG
 
 /**
  * Player namespace.
@@ -297,6 +301,10 @@ namespace Player {
 	 */
 	bool IsPatchDestiny();
 
+	bool IsPatchCommonThisEvent();
+
+	bool IsPatchUnlockPics();
+
 	/**
 	 * @return True when EasyRpg extensions are on
 	 */
@@ -423,9 +431,23 @@ namespace Player {
 	/** game specific configuration */
 	extern Game_ConfigGame game_config;
 
+	extern Game_BaseInterpreterContext* active_interpreter;
+
 #ifdef EMSCRIPTEN
 	/** Name of game emscripten uses */
 	extern std::string emscripten_game_name;
+#endif
+
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	namespace RuntimeOverride {
+		using InterpreterFlags = lcf::rpg::SaveEventExecState::RuntimeFlags;
+
+		void SetRuntimeFlag(lcf::rpg::SaveEventExecState& state, const InterpreterFlags flag, bool flag_value);
+
+		void ClearRuntimeFlags(lcf::rpg::SaveEventExecState& state);
+
+		std::optional<bool> GetConfOverride(const InterpreterFlags flag);
+	}
 #endif
 }
 
@@ -474,31 +496,126 @@ inline bool Player::IsRPG2k3E() {
 }
 
 inline bool Player::IsRPG2k3Commands() {
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	if (auto _override = RuntimeOverride::GetConfOverride(RuntimeOverride::InterpreterFlags::patch_rpg2k3_cmds_on))
+		return *_override;
+#endif
 	return (IsRPG2k3() || game_config.patch_rpg2k3_commands.Get());
 }
 
 inline bool Player::IsRPG2k3ECommands() {
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	if (auto _override = RuntimeOverride::GetConfOverride(RuntimeOverride::InterpreterFlags::patch_rpg2k3_cmds_on))
+		return *_override;
+#endif
 	return (IsRPG2k3E() || game_config.patch_rpg2k3_commands.Get());
 }
 
 inline bool Player::IsPatchDynRpg() {
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	if (auto _override = RuntimeOverride::GetConfOverride(RuntimeOverride::InterpreterFlags::patch_dynrpg_on))
+		return *_override;
+#endif
 	return game_config.patch_dynrpg.Get();
 }
 
 inline bool Player::IsPatchManiac() {
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	if (auto _override = RuntimeOverride::GetConfOverride(RuntimeOverride::InterpreterFlags::patch_maniac_on))
+		return *_override;
+#endif
 	return game_config.patch_maniac.Get() > 0;
 }
 
 inline bool Player::IsPatchKeyPatch() {
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	if (auto _override = RuntimeOverride::GetConfOverride(RuntimeOverride::InterpreterFlags::patch_keypatch_on))
+		return *_override;
+#endif
 	return game_config.patch_key_patch.Get();
 }
 
 inline bool Player::IsPatchDestiny() {
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	if (auto _override = RuntimeOverride::GetConfOverride(RuntimeOverride::InterpreterFlags::patch_destiny_on))
+		return *_override;
+#endif
 	return game_config.patch_destiny.Get();
+}
+
+inline bool Player::IsPatchCommonThisEvent() {
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	if (auto _override = RuntimeOverride::GetConfOverride(RuntimeOverride::InterpreterFlags::patch_common_this_event_on))
+		return *_override;
+#endif
+	return game_config.patch_common_this_event.Get();
+}
+
+inline bool Player::IsPatchUnlockPics() {
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	if (auto _override = RuntimeOverride::GetConfOverride(RuntimeOverride::InterpreterFlags::patch_unlock_pics_on))
+		return *_override;
+#endif
+	return game_config.patch_unlock_pics.Get();
 }
 
 inline bool Player::HasEasyRpgExtensions() {
 	return game_config.patch_easyrpg.Get();
 }
+
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+
+namespace Player::RuntimeOverride {
+	static uint32_t mask_valid_flags =
+		static_cast<uint32_t>(InterpreterFlags::patch_destiny_on)
+		| static_cast<uint32_t>(InterpreterFlags::patch_dynrpg_on)
+		| static_cast<uint32_t>(InterpreterFlags::patch_maniac_on)
+		| static_cast<uint32_t>(InterpreterFlags::patch_common_this_event_on)
+		| static_cast<uint32_t>(InterpreterFlags::patch_unlock_pics_on)
+		| static_cast<uint32_t>(InterpreterFlags::patch_keypatch_on)
+		| static_cast<uint32_t>(InterpreterFlags::patch_rpg2k3_cmds_on)
+		| static_cast<uint32_t>(InterpreterFlags::use_rpg2k_battle_system_on);
+
+	inline void SetRuntimeFlag(lcf::rpg::SaveEventExecState& state, const InterpreterFlags flag, bool flag_value) {
+		// This function assumes that the values inside 'lcf::SaveEventExecState::RuntimeFlags' have been correctly
+		// defined for use in bit-masks, with each given possible input value (defined in 'mask_valid_flags')
+		// having the function of toggleing a given feature 'ON' & this value having a corresponding pair that
+		// follows right after (double the value) with the function of toggleing the same feature 'OFF'...
+		// This is, so the developer is be able to explicitly set a feature either ON or OFF for a given script
+		// frame, regardless of what config setting the Player has been started with.
+		assert((static_cast<uint32_t>(flag) | mask_valid_flags) == mask_valid_flags);
+
+		state.easyrpg_runtime_flags |= static_cast<uint32_t>(InterpreterFlags::conf_override_active);
+
+		if (flag_value) {
+			state.easyrpg_runtime_flags |= static_cast<uint32_t>(flag);
+			state.easyrpg_runtime_flags &= ~(static_cast<uint32_t>(flag) * 2);
+		} else {
+			state.easyrpg_runtime_flags &= ~static_cast<uint32_t>(flag);
+			state.easyrpg_runtime_flags |= (static_cast<uint32_t>(flag) * 2);
+		}
+	}
+
+	inline void ClearRuntimeFlags(lcf::rpg::SaveEventExecState& state) {
+		state.easyrpg_runtime_flags &= ~static_cast<uint32_t>(InterpreterFlags::conf_override_active);
+		state.easyrpg_runtime_flags &= ~mask_valid_flags;
+		state.easyrpg_runtime_flags &= ~(mask_valid_flags * 2);
+	}
+
+	inline std::optional<bool> GetConfOverride(const InterpreterFlags flag) {
+		if (active_interpreter) {
+			auto& state = active_interpreter->GetState();
+			if ((state.easyrpg_runtime_flags & static_cast<uint32_t>(InterpreterFlags::conf_override_active)) > 0) {
+				if ((state.easyrpg_runtime_flags & static_cast<uint32_t>(flag)) > 0)
+					return true;
+				if ((state.easyrpg_runtime_flags & (static_cast<uint32_t>(flag) * 2)) > 0)
+					return false;
+			}
+		}
+		return std::nullopt;
+	}
+}
+
+#endif
 
 #endif

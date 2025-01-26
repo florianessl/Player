@@ -24,6 +24,10 @@ bool Feature::HasRpg2kBattleSystem() {
 	if (Player::IsRPG2k()) {
 		return true;
 	}
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	if (auto _override = Player::RuntimeOverride::GetConfOverride(Player::RuntimeOverride::InterpreterFlags::use_rpg2k_battle_system_on))
+		return *_override;
+#endif
 
 	return lcf::Data::system.easyrpg_use_rpg2k_battle_system;
 }

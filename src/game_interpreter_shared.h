@@ -21,6 +21,7 @@
 
 #include <lcf/rpg/eventcommand.h>
 #include <lcf/rpg/movecommand.h>
+#include <lcf/rpg/saveeventexecstate.h>
 #include <lcf/rpg/saveeventexecframe.h>
 #include <string_view.h>
 
@@ -146,6 +147,8 @@ public:
 
 	virtual int GetThisEventId() const = 0;
 	virtual Game_Character* GetCharacter(int event_id, StringView origin) const = 0;
+
+	virtual const lcf::rpg::SaveEventExecState& GetState() const = 0;
 	virtual const lcf::rpg::SaveEventExecFrame& GetFrame() const = 0;
 
 protected:

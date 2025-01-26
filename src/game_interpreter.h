@@ -85,7 +85,7 @@ public:
 	 * Returns the interpreters current state information.
 	 * For saving state into a save file, use GetSaveState instead.
 	 */
-	const lcf::rpg::SaveEventExecState& GetState() const;
+	const lcf::rpg::SaveEventExecState& GetState() const override;
 
 	/**
 	 * Returns a SaveEventExecState needed for the savefile.

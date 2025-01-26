@@ -314,7 +314,7 @@ bool Game_Interpreter::ReachedLoopLimit() const {
 int Game_Interpreter::GetThisEventId() const {
 	auto event_id = GetCurrentEventId();
 
-	if (event_id == 0 && (Player::IsRPG2k3E() || Player::game_config.patch_common_this_event.Get())) {
+	if (event_id == 0 && (Player::IsRPG2k3E() || Player::IsPatchCommonThisEvent())) {
 		// RM2k3E allows "ThisEvent" commands to run from called
 		// common events. It operates on the last map event in
 		// the call stack.
@@ -381,6 +381,8 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 		EndEventProcessing();
 		return;
 	}
+
+	Player::active_interpreter = this;
 
 	for (; loop_count < loop_limit; ++loop_count) {
 		// If something is calling a menu, we're allowed to execute only 1 command per interpreter. So we pass through if loop_count == 0, and stop at 1 or greater.
@@ -526,6 +528,11 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 	if (Game_Map::GetNeedRefresh()) {
 		Game_Map::Refresh();
 	}
+
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	Player::RuntimeOverride::ClearRuntimeFlags(_state);
+#endif
+	Player::active_interpreter = nullptr;
 }
 
 // Setup Starting Event
@@ -2710,7 +2717,7 @@ namespace PicPointerPatch {
 
 bool Game_Interpreter::CommandShowPicture(lcf::rpg::EventCommand const& com) { // code 11110
 	// Older versions of RPG_RT block pictures when message active.
-	if (!Player::IsEnglish() && !Player::game_config.patch_unlock_pics.Get() && Game_Message::IsMessageActive()) {
+	if (!Player::IsEnglish() && !Player::IsPatchUnlockPics() && Game_Message::IsMessageActive()) {
 		return false;
 	}
 
@@ -2855,7 +2862,7 @@ bool Game_Interpreter::CommandShowPicture(lcf::rpg::EventCommand const& com) { /
 
 bool Game_Interpreter::CommandMovePicture(lcf::rpg::EventCommand const& com) { // code 11120
 	// Older versions of RPG_RT block pictures when message active.
-	if (!Player::IsEnglish() && !Player::game_config.patch_unlock_pics.Get() && Game_Message::IsMessageActive()) {
+	if (!Player::IsEnglish() && !Player::IsPatchUnlockPics() && Game_Message::IsMessageActive()) {
 		return false;
 	}
 
@@ -2975,7 +2982,7 @@ bool Game_Interpreter::CommandMovePicture(lcf::rpg::EventCommand const& com) { /
 
 bool Game_Interpreter::CommandErasePicture(lcf::rpg::EventCommand const& com) { // code 11130
 	// Older versions of RPG_RT block pictures when message active.
-	if (!Player::IsEnglish() && !Player::game_config.patch_unlock_pics.Get() && Game_Message::IsMessageActive()) {
+	if (!Player::IsEnglish() && !Player::IsPatchUnlockPics() && Game_Message::IsMessageActive()) {
 		return false;
 	}
 
@@ -5324,25 +5331,31 @@ bool Game_Interpreter::CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand c
 		return true;
 	}
 
-	// FIXME: Store them as part of the interpreter state
-
+#ifndef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	Output::Warning("CommandEasyRpgSetInterpreterFlag: Not supported on this platform");
+	return true;
+#else
 	std::string flag_name = Utils::LowerCase(ToString(com.string));
 	int flag_value = ValueOrVariable(com.parameters[0], com.parameters[1]);
 
+	using Flag = lcf::rpg::SaveEventExecState::RuntimeFlags;
+	if (flag_name == "destiny")
+		Player::RuntimeOverride::SetRuntimeFlag(_state, Flag::patch_destiny_on, flag_value);
 	if (flag_name == "dynrpg")
-		Player::game_config.patch_dynrpg.Set(flag_value);
+		Player::RuntimeOverride::SetRuntimeFlag(_state, Flag::patch_dynrpg_on, flag_value);
 	if (flag_name == "maniac")
-		Player::game_config.patch_maniac.Set(flag_value);
+		Player::RuntimeOverride::SetRuntimeFlag(_state, Flag::patch_maniac_on, flag_value);
 	if (flag_name == "common-this")
-		Player::game_config.patch_common_this_event.Set(flag_value);
+		Player::RuntimeOverride::SetRuntimeFlag(_state, Flag::patch_common_this_event_on, flag_value);
 	if (flag_name == "pic-unlock")
-		Player::game_config.patch_unlock_pics.Set(flag_value);
+		Player::RuntimeOverride::SetRuntimeFlag(_state, Flag::patch_unlock_pics_on, flag_value);
 	if (flag_name == "key-patch")
-		Player::game_config.patch_key_patch.Set(flag_value);
+		Player::RuntimeOverride::SetRuntimeFlag(_state, Flag::patch_keypatch_on, flag_value);
 	if (flag_name == "rpg2k3-cmds" || flag_name == "rpg2k3-commands")
-		Player::game_config.patch_rpg2k3_commands.Set(flag_value);
+		Player::RuntimeOverride::SetRuntimeFlag(_state, Flag::patch_rpg2k3_cmds_on, flag_value);
 	if (flag_name == "rpg2k-battle")
-		lcf::Data::system.easyrpg_use_rpg2k_battle_system = flag_value;
+		Player::RuntimeOverride::SetRuntimeFlag(_state, Flag::use_rpg2k_battle_system_on, flag_value);
+#endif
 
 	return true;
 }
