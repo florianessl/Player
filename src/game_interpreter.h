@@ -312,8 +312,6 @@ protected:
 
 	void PerformVarOp(int value, int start, int end, lcf::rpg::EventCommand const& com);
 
-	bool EvalCondBranch(lcf::rpg::EventCommand const& com);
-
 	FileRequestBinding request_id;
 	enum class Keys {
 		eDown,
@@ -398,6 +396,50 @@ namespace DispatchTable_VarOp {
 
 	template <CommandType op_type>
 	const dispatch_table_varoperand& BuildDispatchTable(const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx);
+}
+
+namespace DispatchTable_CondBranch {
+	enum CommandType {
+		eCondBranch_Default = 0,
+		eCondBranch_Ex,
+		eCondBranch_LAST
+	};
+
+	using namespace Game_Interpreter_Shared;
+	using condition_Func = bool (*)(lcf::rpg::EventCommand const&, Game_BaseInterpreterContext const&);
+
+
+	class dispatch_table_condition {
+	public:
+		inline dispatch_table_condition(const int patch_flags, const std::map<ConditionalBranch, condition_Func> defined_ops, condition_Func default_case) : patch_flags(patch_flags), ops(InitOps(defined_ops, default_case)) {}
+
+		bool Execute(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) const;
+
+		inline int GetPatchFlags() const { return patch_flags; }
+	private:
+		static constexpr int table_size = { (int)std::numeric_limits<unsigned char>::max() };
+
+		static inline std::array<condition_Func, table_size> InitOps(const std::map<ConditionalBranch, condition_Func> defined_ops, condition_Func default_case) {
+			std::array<condition_Func, table_size> ret;
+
+			for (int i = 0; i < table_size; i++) {
+				auto it = defined_ops.find(static_cast<ConditionalBranch>(std::byte(i)));
+				if (it == defined_ops.end()) {
+					ret[i] = default_case;
+				} else {
+					ret[i] = it->second;
+				}
+			}
+
+			return ret;
+		}
+
+		const int patch_flags;
+		const std::array<condition_Func, table_size> ops;
+	};
+
+	template <CommandType op_type>
+	dispatch_table_condition& BuildDispatchTable(const bool include2k3Commands, const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx);
 }
 
 inline const lcf::rpg::SaveEventExecFrame* Game_Interpreter::GetFramePtr() const {
