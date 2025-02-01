@@ -297,6 +297,9 @@ protected:
 	bool CommandManiacSetGameOption(lcf::rpg::EventCommand const& com);
 	bool CommandManiacControlStrings(lcf::rpg::EventCommand const& com);
 	bool CommandManiacCallCommand(lcf::rpg::EventCommand const& com);
+	bool CommandEasyRpgConditionalBranchEx(lcf::rpg::EventCommand const& com);
+	bool CommandEasyRpgControlSwitchesEx(lcf::rpg::EventCommand const& com);
+	bool CommandEasyRpgControlVariablesEx(lcf::rpg::EventCommand const& com);
 	bool CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand const& com);
 	bool CommandEasyRpgProcessJson(lcf::rpg::EventCommand const& com);
 	bool CommandEasyRpgCloneMapEvent(lcf::rpg::EventCommand const& com);
