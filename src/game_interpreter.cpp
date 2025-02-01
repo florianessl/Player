@@ -1323,6 +1323,115 @@ namespace EvalControlVarOp {
 
 		return 0;
 	}
+
+	enum InspectMapInfoOp {
+		MapTileWidth = 0,
+		MapTileHeight,
+		ParentMap,
+		LoopHorizontal,
+		LoopVertical,
+		OriginalEncounterSteps,
+		CountTroops,
+		CountArenas,
+		Troop_Id,
+		Arena_Top,
+		Arena_Left,
+		Arena_Bottom,
+		Arena_Right,
+		Arena_Width,
+		Arena_Height
+	};
+
+	template <int param_offset>
+	static inline int InspectMapInfo(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+
+		auto& map_info = Game_Map::GetMapInfo();
+
+		switch (static_cast<InspectMapInfoOp>(com.parameters[param_offset]))
+		{
+			case InspectMapInfoOp::MapTileWidth:
+				return Game_Map::GetTilesX();
+			case InspectMapInfoOp::MapTileHeight:
+				return Game_Map::GetTilesY();
+			case InspectMapInfoOp::ParentMap:
+				return map_info.parent_map;
+			case InspectMapInfoOp::LoopHorizontal:
+				return Game_Map::LoopHorizontal();
+			case InspectMapInfoOp::LoopVertical:
+				return Game_Map::LoopVertical();
+			case InspectMapInfoOp::OriginalEncounterSteps:
+				return map_info.encounter_steps;
+			case InspectMapInfoOp::CountTroops:
+				return map_info.encounters.size();;
+			case InspectMapInfoOp::CountArenas:
+			{
+				int cnt_arenas = 0;
+				for (unsigned int i = 0; i < lcf::Data::treemap.maps.size(); ++i) {
+					auto& map = lcf::Data::treemap.maps[i];
+					if (map.parent_map == map_info.ID && map.type == lcf::rpg::TreeMap::MapType_area) {
+						cnt_arenas++;
+					}
+				}
+				return cnt_arenas;
+			}
+			case InspectMapInfoOp::Troop_Id:
+			{
+				int monster_no = com.parameters[param_offset + 1];
+				monster_no = ValueOrVariable(com.parameters[param_offset + 2], monster_no, interpreter);
+				if (monster_no >= 0 && monster_no < map_info.encounters.size()) {
+					return map_info.encounters[monster_no].troop_id;
+				}
+				return 0;
+			}
+			case InspectMapInfoOp::Arena_Top:
+			case InspectMapInfoOp::Arena_Left:
+			case InspectMapInfoOp::Arena_Bottom:
+			case InspectMapInfoOp::Arena_Right:
+			case InspectMapInfoOp::Arena_Width:
+			case InspectMapInfoOp::Arena_Height:
+			{
+				int arena_no = com.parameters[param_offset + 1];
+				arena_no = ValueOrVariable(com.parameters[param_offset + 2], arena_no, interpreter);
+
+				if (arena_no < 0) {
+					return 0;
+				}
+
+				int cnt_arenas = 0;
+				for (unsigned int i = 0; i < lcf::Data::treemap.maps.size(); ++i) {
+					auto& map = lcf::Data::treemap.maps[i];
+					if (map.parent_map == map_info.ID && map.type == lcf::rpg::TreeMap::MapType_area) {
+						if (arena_no < cnt_arenas) {
+							cnt_arenas++;
+							continue;
+						}
+						switch (static_cast<InspectMapInfoOp>(com.parameters[param_offset]))
+						{
+							case InspectMapInfoOp::Arena_Top:
+								return map.area_rect.t;
+							case InspectMapInfoOp::Arena_Left:
+								return map.area_rect.l;
+							case InspectMapInfoOp::Arena_Bottom:
+								return map.area_rect.b;
+							case InspectMapInfoOp::Arena_Right:
+								return map.area_rect.r;
+							case InspectMapInfoOp::Arena_Width:
+								return map.area_rect.r - map.area_rect.l;
+							case InspectMapInfoOp::Arena_Height:
+								return map.area_rect.b - map.area_rect.t;
+							default:
+								return 0;
+						}
+					}
+				}
+				return 0;
+			}
+			default:
+				Output::Warning("InspectMapUnit: Unknown op '{}'", com.parameters[param_offset]);
+		}
+
+		return 0;
+	}
 }
 
 void Game_Interpreter::PerformVarOp(int value, int start, int end, lcf::rpg::EventCommand const& com) {
@@ -5662,6 +5771,7 @@ namespace DispatchTable_VarOp {
 
 		if (includeEasyRpgEx) {
 			ops[eVarOperand_EasyRpg_DateTime] = &DateTime<get_param_offset(op_type)>;
+			ops[eVarOperand_EasyRpg_InspectMapInfo] = &InspectMapInfo<get_param_offset(op_type)>;
 		}
 
 		dispatch_table_varoperand* dispatch_table = new dispatch_table_varoperand(get_param_operand(op_type), (int)patch_flags.to_ulong(), ops, &varOperand_DefaultCase<op_type>);

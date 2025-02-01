@@ -87,9 +87,9 @@ namespace Game_Interpreter_Shared {
 		// Count Variables [id] matching condition or defined (op>=6) for map [map_id]  (Scope: MapEvent)
 		eVarOperand_EasyRpg_CountScopedVarsMatchingCondition_MapEvent,
 
-		// Reserved / Not yet implemented
-		eVarOperand_EasyRpg_DateTime,		// jetrotals new dt operations
-		eVarOperand_EasyRpg_MapInfo,		// jetrotals planned ops for Map/Screen ?
+		eVarOperand_EasyRpg_DateTime,
+		eVarOperand_EasyRpg_InspectMapInfo,
+		// Reserved / Not implemented
 		eVarOperand_EasyRpg_MessageState,	// get info about active message windows
 		eVarOperand_EasyRpg_RngFixedSeed,	// reproducible rng (+ options for rng dependent on map/event ?)
 		//
