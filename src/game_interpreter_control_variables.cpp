@@ -595,8 +595,8 @@ int ControlVariables::InspectMapTreeInfo(InspectMapTreeInfoOp op, int map_id, in
 		case InspectMapTreeInfoOp::Troop_Id:
 		{
 			// TODO: provide a way to conveniently copy values into a range of variables ("ControlVarArrayEx"?) 
-			if (arg1 >= 0 && arg1 < static_cast<int>(map_info.encounters.size())) {
-				return map_info.encounters[arg1].troop_id;
+			if (arg1 >= 1 && arg1 <= static_cast<int>(map_info.encounters.size())) {
+				return map_info.encounters[arg1 - 1].troop_id;
 			}
 			return 0;
 		}
@@ -608,7 +608,7 @@ int ControlVariables::InspectMapTreeInfo(InspectMapTreeInfoOp op, int map_id, in
 		case InspectMapTreeInfoOp::Arena_Height:
 		{
 			// TODO: provide a way to conveniently copy values into a range of variables ("ControlVarArrayEx"?) 
-			if (arg1 < 0) {
+			if (arg1 <= 0) {
 				return 0;
 			}
 
@@ -616,7 +616,7 @@ int ControlVariables::InspectMapTreeInfo(InspectMapTreeInfoOp op, int map_id, in
 			for (unsigned int i = 0; i < lcf::Data::treemap.maps.size(); ++i) {
 				auto& map = lcf::Data::treemap.maps[i];
 				if (map.parent_map == map_info.ID && map.type == lcf::rpg::TreeMap::MapType_area) {
-					if (arg1 < cnt_arenas) {
+					if (arg1 <= cnt_arenas) {
 						cnt_arenas++;
 						continue;
 					}
