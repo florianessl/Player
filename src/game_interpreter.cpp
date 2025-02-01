@@ -786,6 +786,12 @@ bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CommandManiacCallCommand(com);
 		case Cmd::Maniac_GetGameInfo:
 			return CommandManiacGetGameInfo(com);
+		case static_cast<Cmd>(2020):
+			return CommandEasyRpgConditionalBranchEx(com);
+		case static_cast<Cmd>(2021):
+			return CommandEasyRpgControlSwitchesEx(com);
+		case static_cast<Cmd>(2022):
+			return CommandEasyRpgControlVariablesEx(com);
 		case Cmd::EasyRpg_SetInterpreterFlag:
 			return CommandEasyRpgSetInterpreterFlag(com);
 		case Cmd::EasyRpg_ProcessJson:
@@ -1060,7 +1066,6 @@ bool Game_Interpreter::CommandControlSwitches(lcf::rpg::EventCommand const& com)
 }
 
 bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com) { // code 10220
-
 	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
 	static const auto dispatch_table = DispatchTable_VarOp::BuildDispatchTable<DispatchTable_VarOp::eControlVarOp_Default>(Player::IsPatchManiac(), false, false);
 
@@ -3419,7 +3424,6 @@ bool Game_Interpreter::CommandChangeMainMenuAccess(lcf::rpg::EventCommand const&
 }
 
 bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& com) { // Code 12010
-
 	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
 	static const auto dispatch_table = DispatchTable_CondBranch::BuildDispatchTable<DispatchTable_CondBranch::eCondBranch_Default>(Player::IsRPG2k3Commands(), Player::IsPatchManiac(), false, false);
 
@@ -5694,4 +5698,90 @@ namespace DispatchTable_CondBranch {
 
 		return *dispatch_table;
 	}
+}
+
+bool Game_Interpreter::CommandEasyRpgControlSwitchesEx(lcf::rpg::EventCommand const& com) { // 2021
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	int start, end;
+
+	bool target_eval_result = DecodeTargetEvaluationMode<
+		/* validate_patches */ false,
+		/* support_range_indirect */ true,
+		/* support_expressions */ true,
+		/* support_bitmask */ true,
+		/* support_scopes */ true,
+		/* support_named */ true
+	>(com, start, end);
+	if (!target_eval_result) {
+		Output::Warning("ControlSwitchesEx: Unsupported target evaluation mode {}", com.parameters[0]);
+		return true;
+	}
+
+	int val = com.parameters[3];
+	if (start == end) {
+		if (val < 2) {
+			Main_Data::game_switches->Set(start, val == 0);
+		} else {
+			Main_Data::game_switches->Flip(start);
+		}
+		Game_Map::SetNeedRefreshForSwitchChange(start);
+	} else {
+		if (val < 2) {
+			Main_Data::game_switches->SetRange(start, end, val == 0);
+		} else {
+			Main_Data::game_switches->FlipRange(start, end);
+		}
+		Game_Map::SetNeedRefresh(true);
+	}
+
+	return true;
+}
+
+bool Game_Interpreter::CommandEasyRpgControlVariablesEx(lcf::rpg::EventCommand const& com) { // 2022
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+	static const auto dispatch_table = DispatchTable_VarOp::BuildDispatchTable<DispatchTable_VarOp::eControlVarOp_Ex>(true, false, true);
+
+	int value = 0;
+	if (!dispatch_table.Execute(value, com, *this))
+		return true;
+
+	int start, end;
+	bool target_eval_result = DecodeTargetEvaluationMode<
+		/* validate_patches */ false,
+		/* support_range_indirect */ true,
+		/* support_expressions */ true,
+		/* support_bitmask */ true,
+		/* support_scopes */ true,
+		/* support_named */ true
+	>(com, start, end);
+	if (!target_eval_result) {
+		Output::Warning("ControlVariablesEx: Unsupported target evaluation mode {}", com.parameters[0]);
+		return true;
+	}
+	PerformVarOp(value, start, end, com);
+
+	return true;
+}
+
+bool Game_Interpreter::CommandEasyRpgConditionalBranchEx(lcf::rpg::EventCommand const& com) { // Code 2020
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+	static const auto dispatch_table = DispatchTable_CondBranch::BuildDispatchTable<DispatchTable_CondBranch::eCondBranch_Ex>(true, true, false, true);
+
+	bool result = dispatch_table.Execute(com, *this);
+
+	int sub_idx = subcommand_sentinel;
+	if (!result) {
+		sub_idx = eOptionBranchElse;
+		SkipToNextConditional({ Cmd::ElseBranch, Cmd::EndBranch }, com.indent);
+	}
+
+	SetSubcommandIndex(com.indent, sub_idx);
+	return true;
 }
