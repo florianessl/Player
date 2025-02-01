@@ -3419,7 +3419,11 @@ bool Game_Interpreter::CommandChangeMainMenuAccess(lcf::rpg::EventCommand const&
 }
 
 bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& com) { // Code 12010
-	bool result = EvalCondBranch(com);
+
+	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
+	static const auto dispatch_table = DispatchTable_CondBranch::BuildDispatchTable<DispatchTable_CondBranch::eCondBranch_Default>(Player::IsRPG2k3Commands(), Player::IsPatchManiac(), false, false);
+
+	bool result = dispatch_table.Execute(com, *this);
 
 	int sub_idx = subcommand_sentinel;
 	if (!result) {
@@ -3431,141 +3435,122 @@ bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& co
 	return true;
 }
 
-bool Game_Interpreter::EvalCondBranch(lcf::rpg::EventCommand const& com) {
-	const auto& frame = GetFrame();
+namespace EvalCondBranch {
+	using Main_Data::game_switches, Main_Data::game_variables, Main_Data::game_strings;
+	using Main_Data::game_system, Main_Data::game_actors, Main_Data::game_party;
 
-	bool result = false;
-	int value1, value2;
-	int actor_id;
-	Game_Actor* actor;
-	Game_Character* character;
+	bool Switch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		return game_switches->Get(com.parameters[1]) == (com.parameters[2] == 0);
+	}
 
-	switch (com.parameters[0]) {
-	case 0:
-		// Switch
-		result = Main_Data::game_switches->Get(com.parameters[1]) == (com.parameters[2] == 0);
-		break;
-	case 1:
-		// Variable
-		value1 = Main_Data::game_variables->Get(com.parameters[1]);
-		value2 = ValueOrVariable(com.parameters[2], com.parameters[3]);
-		result = CheckOperator(value1, value2, com.parameters[4]);
-		break;
-	case 2:
-		value1 = Main_Data::game_party->GetTimerSeconds(Main_Data::game_party->Timer1);
-		value2 = com.parameters[1];
+	bool Variable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int value1 = game_variables->Get(com.parameters[1]);
+		int value2 = Game_Interpreter_Shared::ValueOrVariable(com.parameters[2], com.parameters[3], interpreter);
+		return Game_Interpreter_Shared::CheckOperator(value1, value2, com.parameters[4]);
+	}
+
+	bool Timer(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int value1 = game_party->GetTimerSeconds(game_party->Timer1);
+		int value2 = com.parameters[1];
 		switch (com.parameters[2]) {
-		case 0:
-			result = (value1 >= value2);
-			break;
-		case 1:
-			result = (value1 <= value2);
-			break;
+			case 0:
+				return (value1 >= value2);
+			case 1:
+				return (value1 <= value2);
 		}
-		break;
-	case 3:
-		// Gold
+		return false;
+	}
+
+	bool Gold(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
 		if (com.parameters[2] == 0) {
 			// Greater than or equal
-			result = (Main_Data::game_party->GetGold() >= com.parameters[1]);
+			return (game_party->GetGold() >= com.parameters[1]);
 		} else {
 			// Less than or equal
-			result = (Main_Data::game_party->GetGold() <= com.parameters[1]);
+			return (game_party->GetGold() <= com.parameters[1]);
 		}
-		break;
-	case 4: {
-		// Item
+	}
+
+	bool Item(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
 		int item_id = com.parameters[1];
 
 		if (Player::IsPatchManiac()) {
-			item_id = ValueOrVariable(com.parameters[3], item_id);
+			item_id = ValueOrVariable(com.parameters[3], item_id, interpreter);
 		}
 
 		if (com.parameters[2] == 0) {
 			// Having
-			result = Main_Data::game_party->GetItemCount(item_id)
-				+ Main_Data::game_party->GetEquippedItemCount(item_id) > 0;
+			return game_party->GetItemCount(item_id)
+				+ game_party->GetEquippedItemCount(item_id) > 0;
 		} else {
 			// Not having
-			result = Main_Data::game_party->GetItemCount(item_id)
-				+ Main_Data::game_party->GetEquippedItemCount(item_id) == 0;
+			return game_party->GetItemCount(item_id)
+				+ game_party->GetEquippedItemCount(item_id) == 0;
 		}
-		break;
 	}
-	case 5:
-		// Hero
-		actor_id = com.parameters[1];
+
+	bool Hero(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int actor_id = com.parameters[1];
 
 		if (Player::IsPatchManiac()) {
-			actor_id = ValueOrVariable(com.parameters[4], actor_id);
+			actor_id = ValueOrVariable(com.parameters[4], actor_id, interpreter);
 		}
 
-		actor = Main_Data::game_actors->GetActor(actor_id);
+		Game_Actor* actor = game_actors->GetActor(actor_id);
 
 		if (!actor) {
 			Output::Warning("ConditionalBranch: Invalid actor ID {}", actor_id);
-			// Use Else Branch
-			SetSubcommandIndex(com.indent, 1);
-			SkipToNextConditional({Cmd::ElseBranch, Cmd::EndBranch}, com.indent);
-			return true;
+			return false;
 		}
 
 		switch (com.parameters[2]) {
-		case 0:
-			// Is actor in party
-			result = Main_Data::game_party->IsActorInParty(actor_id);
-			break;
-		case 1:
-			// Name
-			result = (actor->GetName() == com.string);
-			break;
-		case 2:
-			// Higher or equal level
-			result = (actor->GetLevel() >= com.parameters[3]);
-			break;
-		case 3:
-			// Higher or equal HP
-			result = (actor->GetHp() >= com.parameters[3]);
-			break;
-		case 4:
-			// Is skill learned
-			result = (actor->IsSkillLearned(com.parameters[3]));
-			break;
-		case 5:
-			// Equipped object
-			result = (
-				(actor->GetShieldId() == com.parameters[3]) ||
-				(actor->GetArmorId() == com.parameters[3]) ||
-				(actor->GetHelmetId() == com.parameters[3]) ||
-				(actor->GetAccessoryId() == com.parameters[3]) ||
-				(actor->GetWeaponId() == com.parameters[3])
-				);
-			break;
-		case 6:
-			// Has state
-			result = (actor->HasState(com.parameters[3]));
-			break;
-		default:
-			;
+			case 0:
+				// Is actor in party
+				return game_party->IsActorInParty(actor_id);
+			case 1:
+				// Name
+				return (actor->GetName() == com.string);
+			case 2:
+				// Higher or equal level
+				return (actor->GetLevel() >= com.parameters[3]);
+			case 3:
+				// Higher or equal HP
+				return (actor->GetHp() >= com.parameters[3]);
+			case 4:
+				// Is skill learned
+				return (actor->IsSkillLearned(com.parameters[3]));
+			case 5:
+				// Equipped object
+				return (
+					(actor->GetShieldId() == com.parameters[3]) ||
+					(actor->GetArmorId() == com.parameters[3]) ||
+					(actor->GetHelmetId() == com.parameters[3]) ||
+					(actor->GetAccessoryId() == com.parameters[3]) ||
+					(actor->GetWeaponId() == com.parameters[3])
+					);
+			case 6:
+				// Has state
+				return (actor->HasState(com.parameters[3]));
 		}
-		break;
-	case 6: {
-		// Orientation of char
+		return false;
+	}
+
+	bool CharOrientation(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
 		int chara_id = com.parameters[1];
 
 		if (Player::IsPatchManiac()) {
-			chara_id = ValueOrVariable(com.parameters[3], chara_id);
+			chara_id = ValueOrVariable(com.parameters[3], chara_id, interpreter);
 		}
 
-		character = GetCharacter(chara_id, "ConditionalBranch");
+		Game_Character* character = interpreter.GetCharacter(chara_id, "ConditionalBranch");
 		if (character != NULL) {
-			result = character->GetFacing() == com.parameters[2];
+			return character->GetFacing() == com.parameters[2];
 		}
-		break;
+		return false;
 	}
-	case 7: {
-		// Vehicle in use
-		Game_Vehicle::Type vehicle_id = (Game_Vehicle::Type) (com.parameters[1] + 1);
+
+	bool VehicleInUse(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		Game_Vehicle::Type vehicle_id = (Game_Vehicle::Type)(com.parameters[1] + 1);
 		Game_Vehicle* vehicle = Game_Map::GetVehicle(vehicle_id);
 
 		if (!vehicle) {
@@ -3573,126 +3558,96 @@ bool Game_Interpreter::EvalCondBranch(lcf::rpg::EventCommand const& com) {
 			return true;
 		}
 
-		result = vehicle->IsInUse();
-		break;
+		return vehicle->IsInUse();
 	}
-	case 8:
-		// Key decision initiated this event
-		result = frame.triggered_by_decision_key;
-		break;
-	case 9:
-		// BGM looped at least once
-		result = Main_Data::game_system->BgmPlayedOnce();
-		break;
-	case 10:
-		if (Player::IsRPG2k3Commands()) {
-			value1 = Main_Data::game_party->GetTimerSeconds(Main_Data::game_party->Timer2);
-			value2 = com.parameters[1];
-			switch (com.parameters[2]) {
-				case 0:
-					result = (value1 >= value2);
-					break;
-				case 1:
-					result = (value1 <= value2);
-					break;
-			}
+
+	bool TriggeredByDecisionKey(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		return interpreter.GetFrame().triggered_by_decision_key;
+	}
+
+	bool BgmLoopedOnce(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		return game_system->BgmPlayedOnce();
+	}
+
+	bool Timer2(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int value1 = game_party->GetTimerSeconds(game_party->Timer2);
+		int value2 = com.parameters[1];
+		switch (com.parameters[2]) {
+			case 0:
+				return (value1 >= value2);
+			case 1:
+				return (value1 <= value2);
 		}
-		break;
-	case 11:
-		// RPG Maker 2003 v1.11 features
-		if (Player::IsRPG2k3ECommands()) {
-			switch (com.parameters[1]) {
-				case 0:
-					// Any savestate available
-					result = FileFinder::HasSavegame();
-					break;
-				case 1:
-					// Is Test Play mode?
-					result = Player::debug_flag;
-					break;
-				case 2:
-					// Is ATB wait on?
-					result = Main_Data::game_system->GetAtbMode() == lcf::rpg::SaveSystem::AtbMode_atb_wait;
-					break;
-				case 3:
-					// Is Fullscreen active?
-					result = DisplayUi->IsFullscreen();
-					break;
-			}
+		return false;
+	}
+
+	bool Other(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		switch (com.parameters[1]) {
+			case 0:
+				// Any savestate available
+				return FileFinder::HasSavegame();
+			case 1:
+				// Is Test Play mode?
+				return Player::debug_flag;
+			case 2:
+				// Is ATB wait on?
+				return game_system->GetAtbMode() == lcf::rpg::SaveSystem::AtbMode_atb_wait;
+			case 3:
+				// Is Fullscreen active?
+				return DisplayUi->IsFullscreen();
 		}
-		break;
-	case 12:
-		// Maniac: Other
-		if (Player::IsPatchManiac()) {
-			switch (com.parameters[1]) {
-				case 0:
-					result = Main_Data::game_system->IsLoadedThisFrame();
-					break;
-				case 1:
-					// Joypad is active (We always read from Controller so simply report 'true')
+		return false;
+	}
+
+	bool ManiacsOther(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		switch (com.parameters[1]) {
+			case 0:
+				return game_system->IsLoadedThisFrame();
+			case 1:
+				// Joypad is active (We always read from Controller so simply report 'true')
 #if defined(USE_JOYSTICK) && defined(SUPPORT_JOYSTICK)
-					result = true;
+				return true;
 #else
-					result = false;
+				return false;
 #endif
-					break;
-				case 2:
-					// FIXME: Window has focus. Needs function exposed in DisplayUi
-					// Assuming 'true' as Player usually suspends when loosing focus
-					result = true;
-					break;
-			}
+				break;
+			case 2:
+				// FIXME: Window has focus. Needs function exposed in DisplayUi
+				// Assuming 'true' as Player usually suspends when loosing focus
+				return true;
 		}
-		break;
-	case 13:
-		// Maniac: Switch through Variable
-		if (Player::IsPatchManiac()) {
-			result = Main_Data::game_switches->Get(Main_Data::game_variables->Get(com.parameters[1])) == (com.parameters[2] == 0);
-		}
-		break;
-	case 14:
-		// Maniac: Variable indirect
-		if (Player::IsPatchManiac()) {
-			value1 = Main_Data::game_variables->GetIndirect(com.parameters[1]);
-			value2 = ValueOrVariable(com.parameters[2], com.parameters[3]);
-			result = CheckOperator(value1, value2, com.parameters[4]);
-		}
-		break;
-	case 15:
-		// Maniac: String comparison
-		if (Player::IsPatchManiac()) {
-			int modes[] = {
-				(com.parameters[1]     ) & 15, //str_l mode: 0 = direct, 1 = indirect
-				(com.parameters[1] >> 4) & 15, //str_r mode: 0 = literal, 1 = direct, 2 = indirect
-			};
-
-			int op = com.parameters[4] & 3;
-			int ignoreCase = com.parameters[4] >> 8 & 1;
-
-			std::string str_param = ToString(com.string);
-			StringView str_l = Main_Data::game_strings->GetWithMode(str_param, modes[0]+1, com.parameters[2], *Main_Data::game_variables);
-			StringView str_r = Main_Data::game_strings->GetWithMode(str_param, modes[1], com.parameters[3], *Main_Data::game_variables);
-			result = ManiacPatch::CheckString(str_l, str_r, op, ignoreCase);
-		}
-		break;
-	case 16:
-		// Maniac: Expression
-		result = ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(6), *this);
-		break;
-	default:
-		Output::Warning("ConditionalBranch: Branch {} unsupported", com.parameters[0]);
+		return false;
 	}
 
-	int sub_idx = subcommand_sentinel;
-	if (!result) {
-		sub_idx = eOptionBranchElse;
-		SkipToNextConditional({Cmd::ElseBranch, Cmd::EndBranch}, com.indent);
+	bool ManiacsSwitchIndirect(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		return game_switches->Get(game_variables->Get(com.parameters[1])) == (com.parameters[2] == 0);;
 	}
 
-	SetSubcommandIndex(com.indent, sub_idx);
-	return true;
+	bool ManiacsVariableIndirect(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int value1 = game_variables->GetIndirect(com.parameters[1]);
+		int value2 = Game_Interpreter_Shared::ValueOrVariable(com.parameters[2], com.parameters[3], interpreter);
+		return Game_Interpreter_Shared::CheckOperator(value1, value2, com.parameters[4]);
+	}
+
+	bool ManiacsStringComparison(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int modes[] = {
+			(com.parameters[1]) & 15, //str_l mode: 0 = direct, 1 = indirect
+			(com.parameters[1] >> 4) & 15, //str_r mode: 0 = literal, 1 = direct, 2 = indirect
+		};
+
+		int op = com.parameters[4] & 3;
+		int ignoreCase = com.parameters[4] >> 8 & 1;
+
+		std::string str_param = ToString(com.string);
+		StringView str_l = game_strings->GetWithMode(str_param, modes[0] + 1, com.parameters[2], *game_variables);
+		StringView str_r = game_strings->GetWithMode(str_param, modes[1], com.parameters[3], *game_variables);
+		return ManiacPatch::CheckString(str_l, str_r, op, ignoreCase);
+	}
+
+	bool ManiacsExpression(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		return ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(6), interpreter);
+	}
 }
-
 
 bool Game_Interpreter::CommandElseBranch(lcf::rpg::EventCommand const& com) { //code 22010
 	return CommandOptionGeneric(com, eOptionBranchElse, {Cmd::EndBranch});
@@ -5653,6 +5608,88 @@ namespace DispatchTable_VarOp {
 		}
 
 		dispatch_table_varoperand* dispatch_table = new dispatch_table_varoperand(get_param_operand(op_type), (int)patch_flags.to_ulong(), ops, &varOperand_DefaultCase<op_type>);
+		tables[static_cast<int>(op_type)] = dispatch_table;
+
+		return *dispatch_table;
+	}
+}
+
+namespace DispatchTable_CondBranch {
+	static bool dispatch_table_default_case_triggered = false;
+
+	std::array<dispatch_table_condition*, eCondBranch_LAST> tables = {};
+
+	inline constexpr StringView get_op_name(CommandType op_type) {
+		switch (op_type) {
+			case CommandType::eCondBranch_Default:
+				return "ConditionalBranch";
+			case CommandType::eCondBranch_Ex:
+				return "ConditionalBranchEx";
+			default:
+				return "";
+		}
+	}
+
+	template <CommandType op_type>
+	bool condition_DefaultCase(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const&) {
+		dispatch_table_default_case_triggered = true;
+		Output::Warning("{}: Branch {} unsupported", get_op_name(op_type), com.parameters[0]);
+		return false;
+	};
+
+	EP_ALWAYS_INLINE bool dispatch_table_condition::Execute(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) const {
+		const std::byte operand = static_cast<std::byte>(com.parameters[0]);
+		bool result = ops[std::to_integer<int>(operand)](com, interpreter);
+
+		if (EP_UNLIKELY(dispatch_table_default_case_triggered)) {
+			dispatch_table_default_case_triggered = false;
+			return false;
+		}
+
+		return result;
+	}
+
+	template <CommandType op_type>
+	dispatch_table_condition& BuildDispatchTable(const bool include2k3Commands, const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx) {
+		static_assert(op_type >= eCondBranch_Default && op_type < eCondBranch_LAST);
+		assert(tables[static_cast<int>(op_type)] == nullptr);
+
+		std::bitset<16> patch_flags;
+		patch_flags.set(1, include2k3Commands);
+		patch_flags.set(2, includeManiacs_200128);
+		patch_flags.set(3, includeManiacs24xxxx);
+		patch_flags.set(4, includeEasyRpgEx);
+
+		std::map<ConditionalBranch, condition_Func> ops;
+
+		using namespace EvalCondBranch;
+
+		// Vanilla operands
+		ops[eCondition_Switch] = &Switch;
+		ops[eCondition_Variable] = &Variable;
+		ops[eCondition_Timer] = &Timer;
+		ops[eCondition_Gold] = &Gold;
+		ops[eCondition_Item] = &Item;
+		ops[eCondition_Hero] = &Hero;
+		ops[eCondition_CharOrientation] = &CharOrientation;
+		ops[eCondition_VehicleInUse] = &VehicleInUse;
+		ops[eCondition_TriggeredByDecisionKey] = &TriggeredByDecisionKey;
+		ops[eCondition_BgmLoopedOnce] = &BgmLoopedOnce;
+		if (include2k3Commands) {
+			ops[eCondition_2k3_Timer2] = &Timer2;
+			ops[eCondition_2k3_Other] = &Other;
+		}
+		// end Vanilla operands
+
+		if (includeManiacs_200128) {
+			ops[eCondition_Maniacs_Other] = &ManiacsOther;
+			ops[eCondition_Maniacs_SwitchIndirect] = &ManiacsSwitchIndirect;
+			ops[eCondition_Maniacs_VariableIndirect] = &ManiacsVariableIndirect;
+			ops[eCondition_Maniacs_StringComparison] = &ManiacsStringComparison;
+			ops[eCondition_Maniacs_Expression] = &ManiacsExpression;
+		}
+
+		dispatch_table_condition* dispatch_table = new dispatch_table_condition((int)patch_flags.to_ulong(), ops, &condition_DefaultCase<op_type>);
 		tables[static_cast<int>(op_type)] = dispatch_table;
 
 		return *dispatch_table;

@@ -106,6 +106,42 @@ namespace Game_Interpreter_Shared {
 		eVarOperand_MAX = eVarOperand_EasyRpg_LAST
 	};
 
+	enum ConditionalBranch : std::uint8_t {
+		eCondition_Switch = 0,
+		eCondition_Variable,
+		eCondition_Timer,
+		eCondition_Gold,
+		eCondition_Item,
+		eCondition_Hero,
+		eCondition_CharOrientation,
+		eCondition_VehicleInUse,
+		eCondition_TriggeredByDecisionKey,
+		eCondition_BgmLoopedOnce,
+		eCondition_2k3_Timer2,
+		eCondition_2k3_Other,
+		eCondition_Maniacs_Other = 12,
+		eCondition_Maniacs_SwitchIndirect,
+		eCondition_Maniacs_VariableIndirect,
+		eCondition_Maniacs_StringComparison,
+		eCondition_Maniacs_Expression,
+
+		eCondition_EasyRpg_FrameSwitch = 200,
+		eCondition_EasyRpg_ScopedSwitch_Map,
+		eCondition_EasyRpg_ScopedSwitch_MapEvent,
+		eCondition_EasyRpg_FrameVariable,
+		eCondition_EasyRpg_ScopedVariable_Map,
+		eCondition_EasyRpg_ScopedVariable_MapEvent,
+
+		eCondition_Vanilla_FIRST = eCondition_Switch,
+		eCondition_Vanilla_LAST = eCondition_2k3_Other,
+		eCondition_Maniacs_FIRST = eCondition_Maniacs_Other,
+		eCondition_Maniacs_LAST = eCondition_Maniacs_Expression,
+		eCondition_EasyRpg_FIRST = eCondition_EasyRpg_FrameSwitch,
+		eCondition_EasyRpg_LAST = eCondition_EasyRpg_ScopedVariable_MapEvent,
+
+		eCondition_MAX = eCondition_EasyRpg_LAST
+	};
+
 	/*
 	* Indicates how the target of an interpreter operation (lvalue) should be evaluated.
 	*/
