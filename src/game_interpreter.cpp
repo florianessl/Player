@@ -1128,7 +1128,11 @@ bool Game_Interpreter::EvalControlVarOp(int&value, int operand, lcf::rpg::EventC
 			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
 				actor_id = ValueOrVariable(com.parameters[7], actor_id);
 			}
-			value = ControlVariables::Actor(com.parameters[6], actor_id);
+			if (Player::IsPatchManiac()) {
+				value = ControlVariables::Actor<true>(com.parameters[6], actor_id);
+			} else {
+				value = ControlVariables::Actor<false>(com.parameters[6], actor_id);
+			}
 			break;
 		}
 		case 6: {
@@ -1137,12 +1141,20 @@ bool Game_Interpreter::EvalControlVarOp(int&value, int operand, lcf::rpg::EventC
 			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
 				event_id = ValueOrVariable(com.parameters[7], event_id);
 			}
-			value = ControlVariables::Event(com.parameters[6], event_id, *this);
+			if (Player::IsPatchManiac()) {
+				value = ControlVariables::Event<true>(com.parameters[6], event_id, *this);
+			} else {
+				value = ControlVariables::Event<false>(com.parameters[6], event_id, *this);
+			}
 			break;
 		}
 		case 7:
 			// More
-			value = ControlVariables::Other(com.parameters[5]);
+			if (Player::IsPatchManiac()) {
+				value = ControlVariables::Other<true>(com.parameters[5]);
+			} else {
+				value = ControlVariables::Other<false>(com.parameters[5]);
+			}
 			break;
 		case 8: {
 			int enemy_id = com.parameters[5];
@@ -1151,7 +1163,11 @@ bool Game_Interpreter::EvalControlVarOp(int&value, int operand, lcf::rpg::EventC
 			}
 
 			// Battle related
-			value = ControlVariables::Enemy(com.parameters[6], enemy_id);
+			if (Player::IsPatchManiac()) {
+				value = ControlVariables::Enemy<true>(com.parameters[6], enemy_id);
+			} else {
+				value = ControlVariables::Enemy<false>(com.parameters[6], enemy_id);
+			}
 			break;
 		}
 		case 9: { // Party Member (Maniac)

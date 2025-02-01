@@ -57,6 +57,7 @@ int ControlVariables::Item(int op, int item) {
 	return 0;
 }
 
+template<bool ManiacPatch>
 int ControlVariables::Actor(int op, int actor_id) {
 	auto actor = Main_Data::game_actors->GetActor(actor_id);
 
@@ -128,13 +129,13 @@ int ControlVariables::Actor(int op, int actor_id) {
 			break;
 		case 15:
 			// ID
-			if (Player::IsPatchManiac()) {
+			if constexpr (ManiacPatch) {
 				return actor->GetId();
 			}
 			break;
 		case 16:
 			// ATB
-			if (Player::IsPatchManiac()) {
+			if constexpr (ManiacPatch) {
 				return actor->GetAtbGauge();
 			}
 			break;
@@ -152,9 +153,10 @@ int ControlVariables::Party(int op, int party_idx) {
 		return 0;
 	}
 
-	return ControlVariables::Actor(op, actor->GetId());
+	return ControlVariables::Actor<true>(op, actor->GetId());
 }
 
+template<bool ManiacPatch>
 int ControlVariables::Event(int op, int event_id, const Game_BaseInterpreterContext& interpreter) {
 	auto character = interpreter.GetCharacter(event_id, "ControlVariables::Event");
 	if (character) {
@@ -208,7 +210,10 @@ int ControlVariables::Event(int op, int event_id, const Game_BaseInterpreterCont
 			}
 			case 6:
 				// Event ID
-				return Player::IsPatchManiac() ? interpreter.GetThisEventId() : 0;
+				if constexpr (ManiacPatch) {
+					return interpreter.GetThisEventId();
+				}
+				return 0;
 		}
 
 		Output::Warning("ControlVariables::Event: Unknown op {}", op);
@@ -217,6 +222,7 @@ int ControlVariables::Event(int op, int event_id, const Game_BaseInterpreterCont
 	return 0;
 }
 
+template<bool ManiacPatch>
 int ControlVariables::Other(int op) {
 	switch (op) {
 		case 0:
@@ -265,7 +271,7 @@ int ControlVariables::Other(int op) {
 			break;
 		case 10:
 			// Current date (YYMMDD)
-			if (Player::IsPatchManiac()) {
+			if constexpr (ManiacPatch) {
 				std::time_t t = std::time(nullptr);
 				std::tm* tm = std::localtime(&t);
 				return atoi(Utils::FormatDate(tm, Utils::DateFormat_YYMMDD).c_str());
@@ -273,7 +279,7 @@ int ControlVariables::Other(int op) {
 			break;
 		case 11:
 			// Current time (HHMMSS)
-			if (Player::IsPatchManiac()) {
+			if constexpr (ManiacPatch) {
 				std::time_t t = std::time(nullptr);
 				std::tm* tm = std::localtime(&t);
 				return atoi(Utils::FormatDate(tm, Utils::DateFormat_HHMMSS).c_str());
@@ -281,13 +287,13 @@ int ControlVariables::Other(int op) {
 			break;
 		case 12:
 			// Frames
-			if (Player::IsPatchManiac()) {
+			if constexpr (ManiacPatch) {
 				return Main_Data::game_system->GetFrameCounter();
 			}
 			break;
 		case 13:
 			// Patch version
-			if (Player::IsPatchManiac()) {
+			if constexpr (ManiacPatch) {
 				// Latest version before the engine rewrite
 				return 200128;
 			}
@@ -298,6 +304,7 @@ int ControlVariables::Other(int op) {
 	return 0;
 }
 
+template <bool ManiacPatch>
 int ControlVariables::Enemy(int op, int enemy_idx) {
 	auto enemy = Main_Data::game_enemyparty->GetEnemy(enemy_idx);
 
@@ -341,13 +348,13 @@ int ControlVariables::Enemy(int op, int enemy_idx) {
 			break;
 		case 8:
 			// ID
-			if (Player::IsPatchManiac()) {
+			if constexpr (ManiacPatch) {
 				return enemy->GetId();
 			}
 			break;
 		case 9:
 			// ATB
-			if (Player::IsPatchManiac()) {
+			if constexpr (ManiacPatch) {
 				return enemy->GetAtbGauge();
 			}
 			break;
@@ -487,3 +494,16 @@ int ControlVariables::Divmul(int arg1, int arg2, int arg3) {
 int ControlVariables::Between(int arg1, int arg2, int arg3) {
 	return (arg1 >= arg2 && arg2 <= arg3) ? 0 : 1;
 }
+
+//explicit declarations 
+template int ControlVariables::Actor<false>(int op, int actor_id);
+template int ControlVariables::Actor<true>(int op, int actor_id);
+
+template int ControlVariables::Event<false>(int op, int event_id, const Game_BaseInterpreterContext& interpreter);
+template int ControlVariables::Event<true>(int op, int event_id, const Game_BaseInterpreterContext& interpreter);
+
+template int ControlVariables::Other<false>(int op);
+template int ControlVariables::Other<true>(int op);
+
+template int ControlVariables::Enemy<false>(int op, int enemy_idx);
+template int ControlVariables::Enemy<true>(int op, int enemy_idx);
