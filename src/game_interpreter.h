@@ -310,6 +310,11 @@ protected:
 	void ForegroundTextPush(PendingMessage pm);
 	void EndEventProcessing();
 
+	bool EvalControlVarOp(int& value, int operand, lcf::rpg::EventCommand const& com);
+	void PerformVarOp(int value, int start, int end, lcf::rpg::EventCommand const& com);
+
+	bool EvalCondBranch(lcf::rpg::EventCommand const& com);
+
 	FileRequestBinding request_id;
 	enum class Keys {
 		eDown,
