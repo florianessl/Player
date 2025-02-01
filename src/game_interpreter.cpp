@@ -1277,269 +1277,39 @@ namespace EvalControlVarOp {
 		return ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(param_offset + 1, com.parameters[param_offset]), interpreter);
 	}
 
-	enum class DateTimeOp {
-		Year = 0,
-		Month,
-		Day,
-		Hour,
-		Minute,
-		Second,
-		WeekDay,
-		DayOfYear,
-		IsDayLightSavings,
-		TimeStamp
-	};
-
 	template <int param_offset>
 	static inline int DateTime(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
-		std::time_t t = std::time(nullptr);
-		std::tm* tm = std::localtime(&t);
-
-		switch (static_cast<DateTimeOp>(com.parameters[param_offset]))
-		{
-			case DateTimeOp::Year:
-				return tm->tm_year + 1900;
-			case DateTimeOp::Month:
-				return tm->tm_mon + 1;
-			case DateTimeOp::Day:
-				return tm->tm_mday;
-			case DateTimeOp::Hour:
-				return tm->tm_hour;
-			case DateTimeOp::Minute:
-				return tm->tm_min;
-			case DateTimeOp::Second:
-				return tm->tm_sec;
-			case DateTimeOp::WeekDay:
-				return tm->tm_wday + 1;
-			case DateTimeOp::DayOfYear:
-				return tm->tm_yday + 1;
-			case DateTimeOp::IsDayLightSavings:
-				return tm->tm_isdst;
-			case DateTimeOp::TimeStamp:
-				return t;
-			default:
-				Output::Warning("GetTime: Unknown op '{}'", com.parameters[param_offset]);
-		}
-
-		return 0;
+		return ControlVariables::DateTime(static_cast<ControlVariables::DateTimeOp>(com.parameters[param_offset]));
 	}
-
-	enum ActiveMapInfoOp {
-		MapTileWidth = 0,
-		MapTileHeight,
-		LoopHorizontal,
-		LoopVertical
-	};
 
 	template <int param_offset>
 	static inline int ActiveMapInfo(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
-		switch (static_cast<ActiveMapInfoOp>(com.parameters[param_offset]))
-		{
-			case ActiveMapInfoOp::MapTileWidth:
-				return Game_Map::GetTilesX();
-			case ActiveMapInfoOp::MapTileHeight:
-				return Game_Map::GetTilesY();
-			case ActiveMapInfoOp::LoopHorizontal:
-				return Game_Map::LoopHorizontal();
-			case ActiveMapInfoOp::LoopVertical:
-				return Game_Map::LoopVertical();
-			default:
-				Output::Warning("ActiveMapInfo: Unknown op '{}'", com.parameters[param_offset]);
-		}
-
-		return 0;
+		return ControlVariables::ActiveMapInfo(static_cast<ControlVariables::ActiveMapInfoOp>(com.parameters[param_offset]));
 	}
-	enum InspectMapTreeInfoOp {
-		ParentMap = 0,
-		OriginalEncounterSteps,
-		CountTroops,
-		CountArenas,
-		Troop_Id,
-		Arena_Top,
-		Arena_Left,
-		Arena_Bottom,
-		Arena_Right,
-		Arena_Width,
-		Arena_Height
-	};
 
 	template <int param_offset>
 	static inline int InspectMapTreeInfo(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
-		int map_id = ValueOrVariableBitfield(com.parameters[param_offset + 3], 0, com.parameters[param_offset + 1], interpreter);
+		int map_id = 0, arg1 = 0;
+		if (com.parameters.size() >= (param_offset+4)) {
+			map_id = ValueOrVariableBitfield(com.parameters[param_offset + 3], 0, com.parameters[param_offset + 1], interpreter);
+			arg1 = ValueOrVariableBitfield(com.parameters[param_offset + 3], 1, com.parameters[param_offset + 2], interpreter);
+		} else if (com.parameters.size() == (param_offset+3)) {
+			arg1 = com.parameters[param_offset + 2];
+		}
 		if (map_id == 0) {
 			map_id = Game_Map::GetMapId();
 		}
-		auto& map_info = Game_Map::GetMapInfo(map_id);
-		if (map_info.ID == 0) {
-			return 0;
-		}
-
-		switch (static_cast<InspectMapTreeInfoOp>(com.parameters[param_offset]))
-		{
-			case InspectMapTreeInfoOp::ParentMap:
-				return map_info.parent_map;
-			case InspectMapTreeInfoOp::OriginalEncounterSteps:
-				return map_info.encounter_steps;
-			case InspectMapTreeInfoOp::CountTroops:
-				return map_info.encounters.size();;
-			case InspectMapTreeInfoOp::CountArenas:
-			{
-				int cnt_arenas = 0;
-				for (unsigned int i = 0; i < lcf::Data::treemap.maps.size(); ++i) {
-					auto& map = lcf::Data::treemap.maps[i];
-					if (map.parent_map == map_info.ID && map.type == lcf::rpg::TreeMap::MapType_area) {
-						cnt_arenas++;
-					}
-				}
-				return cnt_arenas;
-			}
-			case InspectMapTreeInfoOp::Troop_Id:
-			{
-				// TODO: provide a way to conveniently copy values into a range of variables ("ControlVarArrayEx"?) 
-				int monster_no = ValueOrVariableBitfield(com.parameters[param_offset + 3], 1, com.parameters[param_offset + 2], interpreter);
-				if (monster_no >= 0 && monster_no < map_info.encounters.size()) {
-					return map_info.encounters[monster_no].troop_id;
-				}
-				return 0;
-			}
-			case InspectMapTreeInfoOp::Arena_Top:
-			case InspectMapTreeInfoOp::Arena_Left:
-			case InspectMapTreeInfoOp::Arena_Bottom:
-			case InspectMapTreeInfoOp::Arena_Right:
-			case InspectMapTreeInfoOp::Arena_Width:
-			case InspectMapTreeInfoOp::Arena_Height:
-			{
-				// TODO: provide a way to conveniently copy values into a range of variables ("ControlVarArrayEx"?) 
-				int arena_no = ValueOrVariableBitfield(com.parameters[param_offset + 3], 1, com.parameters[param_offset + 2], interpreter);
-				arena_no = ValueOrVariable(com.parameters[param_offset + 2], arena_no, interpreter);
-
-				if (arena_no < 0) {
-					return 0;
-				}
-
-				int cnt_arenas = 0;
-				for (unsigned int i = 0; i < lcf::Data::treemap.maps.size(); ++i) {
-					auto& map = lcf::Data::treemap.maps[i];
-					if (map.parent_map == map_info.ID && map.type == lcf::rpg::TreeMap::MapType_area) {
-						if (arena_no < cnt_arenas) {
-							cnt_arenas++;
-							continue;
-						}
-						switch (static_cast<InspectMapTreeInfoOp>(com.parameters[param_offset]))
-						{
-							case InspectMapTreeInfoOp::Arena_Top:
-								return map.area_rect.t;
-							case InspectMapTreeInfoOp::Arena_Left:
-								return map.area_rect.l;
-							case InspectMapTreeInfoOp::Arena_Bottom:
-								return map.area_rect.b;
-							case InspectMapTreeInfoOp::Arena_Right:
-								return map.area_rect.r;
-							case InspectMapTreeInfoOp::Arena_Width:
-								return map.area_rect.r - map.area_rect.l;
-							case InspectMapTreeInfoOp::Arena_Height:
-								return map.area_rect.b - map.area_rect.t;
-							default:
-								return 0;
-						}
-					}
-				}
-				return 0;
-			}
-			default:
-				Output::Warning("InspectMapTreeInfo: Unknown op '{}'", com.parameters[param_offset]);
-		}
-
-		return 0;
+		return ControlVariables::InspectMapTreeInfo(static_cast<ControlVariables::InspectMapTreeInfoOp>(com.parameters[param_offset]), map_id, arg1);
 	}
-
-	enum MessageSystemStateOp {
-		IsMessageTransparent = 0,
-		IsMessagePositionFixed,
-		IsContinueEvents,
-		MessagePosition,
-		IsMessageFaceRightPosition
-	};
 
 	template <int param_offset>
 	static inline int MessageSystemState(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
-
-		switch (static_cast<MessageSystemStateOp>(com.parameters[param_offset]))
-		{
-			case MessageSystemStateOp::IsMessageTransparent:
-				return Main_Data::game_system->IsMessageTransparent();
-			case MessageSystemStateOp::IsMessagePositionFixed:
-				return Main_Data::game_system->IsMessagePositionFixed();
-			case MessageSystemStateOp::IsContinueEvents:
-				return Main_Data::game_system->GetMessageContinueEvents();
-			case MessageSystemStateOp::MessagePosition:
-				return Main_Data::game_system->GetMessagePosition();
-			case MessageSystemStateOp::IsMessageFaceRightPosition:
-				return Main_Data::game_system->IsMessageFaceRightPosition();
-			default:
-			{
-				Output::Warning("MessageSystemState: Unknown op '{}'", com.parameters[param_offset]);
-			}
-		}
-		return 0;
+		return ControlVariables::MessageSystemState(static_cast<ControlVariables::MessageSystemStateOp>(com.parameters[param_offset]));
 	}
-
-	enum MessageWindowStateOp {
-		IsMessageActive = 0,
-		IsFaceActive,
-		CanContinue,
-		WindowTop,
-		WindowLeft,
-		WindowBottom,
-		WindowRight,
-		WindowWidth,
-		WindowHeight,
-		WindowType
-	};
 
 	template <int param_offset>
 	static inline int MessageWindowState(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
-
-		if (com.parameters[param_offset] == static_cast<int>(MessageWindowStateOp::IsMessageActive)) {
-			return Game_Message::IsMessageActive();
-		}
-
-		auto* window = Game_Message::GetWindow();
-		if (window) {
-			switch (static_cast<MessageWindowStateOp>(com.parameters[param_offset]))
-			{
-				case MessageWindowStateOp::IsFaceActive:
-					return window->GetPendingMessage().IsFaceEnabled() && !Main_Data::game_system->GetMessageFaceName().empty();
-				case MessageWindowStateOp::CanContinue:
-					return !window->GetPause();
-				case MessageWindowStateOp::WindowTop:
-					return window->GetY();
-				case MessageWindowStateOp::WindowLeft:
-					return window->GetX();
-				case MessageWindowStateOp::WindowBottom:
-					return window->GetY() + window->GetHeight();
-				case MessageWindowStateOp::WindowRight:
-					return window->GetX() + window->GetWidth();
-				case MessageWindowStateOp::WindowWidth:
-					return window->GetWidth();
-				case MessageWindowStateOp::WindowHeight:
-					return window->GetHeight();
-				case MessageWindowStateOp::WindowType:
-					if (window->GetPendingMessage().HasChoices())
-						return 1;
-					if (window->GetPendingMessage().HasNumberInput())
-						return 2;
-					if (window->GetPendingMessage().ShowGoldWindow())
-						return 3;
-					return 0;
-				default:
-				{
-					Output::Warning("MessageWindowState: Unknown op '{}'", com.parameters[param_offset]);
-				}
-			}
-		}
-
-		return 0;
+		return ControlVariables::MessageWindowState(static_cast<ControlVariables::MessageWindowStateOp>(com.parameters[param_offset]));
 	}
 }
 
@@ -3708,7 +3478,7 @@ namespace EvalCondBranch {
 	using Main_Data::game_switches, Main_Data::game_variables, Main_Data::game_strings;
 	using Main_Data::game_system, Main_Data::game_actors, Main_Data::game_party;
 
-	bool Switch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool Switch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return game_switches->Get(com.parameters[1]) == (com.parameters[2] == 0);
 	}
 
@@ -3718,7 +3488,7 @@ namespace EvalCondBranch {
 		return Game_Interpreter_Shared::CheckOperator(value1, value2, com.parameters[4]);
 	}
 
-	bool Timer(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool Timer(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		int value1 = game_party->GetTimerSeconds(game_party->Timer1);
 		int value2 = com.parameters[1];
 		switch (com.parameters[2]) {
@@ -3730,7 +3500,7 @@ namespace EvalCondBranch {
 		return false;
 	}
 
-	bool Gold(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool Gold(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		if (com.parameters[2] == 0) {
 			// Greater than or equal
 			return (game_party->GetGold() >= com.parameters[1]);
@@ -3818,7 +3588,7 @@ namespace EvalCondBranch {
 		return false;
 	}
 
-	bool VehicleInUse(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool VehicleInUse(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		Game_Vehicle::Type vehicle_id = (Game_Vehicle::Type)(com.parameters[1] + 1);
 		Game_Vehicle* vehicle = Game_Map::GetVehicle(vehicle_id);
 
@@ -3830,15 +3600,15 @@ namespace EvalCondBranch {
 		return vehicle->IsInUse();
 	}
 
-	bool TriggeredByDecisionKey(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool TriggeredByDecisionKey(lcf::rpg::EventCommand const& /*com*/, Game_BaseInterpreterContext const& interpreter) {
 		return interpreter.GetFrame().triggered_by_decision_key;
 	}
 
-	bool BgmLoopedOnce(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool BgmLoopedOnce(lcf::rpg::EventCommand const& /*com*/, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return game_system->BgmPlayedOnce();
 	}
 
-	bool Timer2(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool Timer2(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		int value1 = game_party->GetTimerSeconds(game_party->Timer2);
 		int value2 = com.parameters[1];
 		switch (com.parameters[2]) {
@@ -3850,7 +3620,7 @@ namespace EvalCondBranch {
 		return false;
 	}
 
-	bool Other(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool Other(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		switch (com.parameters[1]) {
 			case 0:
 				// Any savestate available
@@ -3868,7 +3638,7 @@ namespace EvalCondBranch {
 		return false;
 	}
 
-	bool ManiacsOther(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool ManiacsOther(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		switch (com.parameters[1]) {
 			case 0:
 				return game_system->IsLoadedThisFrame();
@@ -3888,7 +3658,7 @@ namespace EvalCondBranch {
 		return false;
 	}
 
-	bool ManiacsSwitchIndirect(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool ManiacsSwitchIndirect(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return game_switches->Get(game_variables->Get(com.parameters[1])) == (com.parameters[2] == 0);;
 	}
 
@@ -3898,7 +3668,7 @@ namespace EvalCondBranch {
 		return Game_Interpreter_Shared::CheckOperator(value1, value2, com.parameters[4]);
 	}
 
-	bool ManiacsStringComparison(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	bool ManiacsStringComparison(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		int modes[] = {
 			(com.parameters[1]) & 15, //str_l mode: 0 = direct, 1 = indirect
 			(com.parameters[1] >> 4) & 15, //str_r mode: 0 = literal, 1 = direct, 2 = indirect
