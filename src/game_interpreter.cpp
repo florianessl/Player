@@ -1096,17 +1096,17 @@ namespace EvalControlVarOp {
 	using Main_Data::game_switches, Main_Data::game_variables;
 
 	template <int param_offset>
-	int Constant(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	int Constant(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return com.parameters[param_offset];
 	}
 
 	template <int param_offset>
-	int Variable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	int Variable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return game_variables->Get(com.parameters[param_offset]);
 	}
 
 	template <int param_offset>
-	int VariableIndirect(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	int VariableIndirect(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return game_variables->GetIndirect(com.parameters[param_offset]);
 	}
 
@@ -1159,7 +1159,7 @@ namespace EvalControlVarOp {
 	}
 
 	template <int param_offset, bool Maniac>
-	int Other(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	int Other(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return ControlVariables::Other<Maniac>(com.parameters[param_offset]);
 	}
 
@@ -1185,7 +1185,7 @@ namespace EvalControlVarOp {
 	}
 
 	template <int param_offset>
-	int Switch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	int Switch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		int value = com.parameters[param_offset];
 		if (com.parameters[param_offset + 1] == 1) {
 			value = game_switches->GetInt(value);
@@ -1278,12 +1278,12 @@ namespace EvalControlVarOp {
 	}
 
 	template <int param_offset>
-	static inline int DateTime(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	static inline int DateTime(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return ControlVariables::DateTime(static_cast<ControlVariables::DateTimeOp>(com.parameters[param_offset]));
 	}
 
 	template <int param_offset>
-	static inline int ActiveMapInfo(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	static inline int ActiveMapInfo(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return ControlVariables::ActiveMapInfo(static_cast<ControlVariables::ActiveMapInfoOp>(com.parameters[param_offset]));
 	}
 
@@ -1303,12 +1303,12 @@ namespace EvalControlVarOp {
 	}
 
 	template <int param_offset>
-	static inline int MessageSystemState(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	static inline int MessageSystemState(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return ControlVariables::MessageSystemState(static_cast<ControlVariables::MessageSystemStateOp>(com.parameters[param_offset]));
 	}
 
 	template <int param_offset>
-	static inline int MessageWindowState(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	static inline int MessageWindowState(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& /*interpreter*/) {
 		return ControlVariables::MessageWindowState(static_cast<ControlVariables::MessageWindowStateOp>(com.parameters[param_offset]));
 	}
 }
