@@ -1276,6 +1276,53 @@ namespace EvalControlVarOp {
 	static inline int Expression(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)	{
 		return ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(param_offset + 1, com.parameters[param_offset]), interpreter);
 	}
+
+	enum class DateTimeOp {
+		Year = 0,
+		Month,
+		Day,
+		Hour,
+		Minute,
+		Second,
+		WeekDay,
+		DayOfYear,
+		IsDayLightSavings,
+		TimeStamp
+	};
+
+	template <int param_offset>
+	static inline int DateTime(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		std::time_t t = std::time(nullptr);
+		std::tm* tm = std::localtime(&t);
+
+		switch (static_cast<DateTimeOp>(com.parameters[param_offset]))
+		{
+			case DateTimeOp::Year:
+				return tm->tm_year + 1900;
+			case DateTimeOp::Month:
+				return tm->tm_mon + 1;
+			case DateTimeOp::Day:
+				return tm->tm_mday;
+			case DateTimeOp::Hour:
+				return tm->tm_hour;
+			case DateTimeOp::Minute:
+				return tm->tm_min;
+			case DateTimeOp::Second:
+				return tm->tm_sec;
+			case DateTimeOp::WeekDay:
+				return tm->tm_wday + 1;
+			case DateTimeOp::DayOfYear:
+				return tm->tm_yday + 1;
+			case DateTimeOp::IsDayLightSavings:
+				return tm->tm_isdst;
+			case DateTimeOp::TimeStamp:
+				return t;
+			default:
+				Output::Warning("GetTime: Unknown op '{}'", com.parameters[param_offset]);
+		}
+
+		return 0;
+	}
 }
 
 void Game_Interpreter::PerformVarOp(int value, int start, int end, lcf::rpg::EventCommand const& com) {
@@ -5611,6 +5658,10 @@ namespace DispatchTable_VarOp {
 			ops[eVarOperand_Maniacs_Binary] = &Binary<get_param_offset(op_type)>;
 			ops[eVarOperand_Maniacs_Ternary] = &Ternary<get_param_offset(op_type)>;
 			ops[eVarOperand_Maniacs_Expression] = &Expression<get_param_offset(op_type)>;
+		}
+
+		if (includeEasyRpgEx) {
+			ops[eVarOperand_EasyRpg_DateTime] = &DateTime<get_param_offset(op_type)>;
 		}
 
 		dispatch_table_varoperand* dispatch_table = new dispatch_table_varoperand(get_param_operand(op_type), (int)patch_flags.to_ulong(), ops, &varOperand_DefaultCase<op_type>);
