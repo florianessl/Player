@@ -1068,6 +1068,26 @@ bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com
 		return true;
 	}
 
+	if (!EvalControlVarOp(value, operand, com))
+		return true;
+
+	int start, end;
+	bool target_eval_result = DecodeTargetEvaluationMode<
+		/* validate_patches */ true,
+		/* support_range_indirect */ true,
+		/* support_expressions */ true,
+		/* support_bitmask */ false,
+		/* support_scopes */ false
+	>(com, start, end);
+	if (!target_eval_result) {
+		Output::Warning("ControlVariables: Unsupported target evaluation mode {}", com.parameters[0]);
+		return true;
+	}
+	PerformVarOp(value, start, end, com);
+	return true;
+}
+
+bool Game_Interpreter::EvalControlVarOp(int&value, int operand, lcf::rpg::EventCommand const& com) {
 	switch (operand) {
 		case 0:
 			// Constant
@@ -1236,29 +1256,18 @@ bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com
 			break;
 		default:
 			Output::Warning("ControlVariables: Unsupported operand {}", operand);
-			return true;
+			return false;
 	}
+	return true;
+}
 
-	int start, end;
-	bool target_eval_result = DecodeTargetEvaluationMode<
-		/* validate_patches */ true,
-		/* support_range_indirect */ true,
-		/* support_expressions */ true,
-		/* support_bitmask */ false,
-		/* support_scopes */ false
-	>(com, start, end);
-	if (!target_eval_result) {
-		Output::Warning("ControlVariables: Unsupported target evaluation mode {}", com.parameters[0]);
-		return true;
-	}
-
+void Game_Interpreter::PerformVarOp(int value, int start, int end, lcf::rpg::EventCommand const& com) {
 	{
 		int operation = com.parameters[3];
 		if (EP_UNLIKELY(operation >= 6 && !Player::IsPatchManiac())) {
 			Output::Warning("ControlVariables: Unsupported operation {}", operation);
-			return true;
+			return;
 		}
-
 		if (start == end) {
 			// Single variable case - if this is random value, we already called the RNG earlier.
 			switch (operation) {
@@ -1455,8 +1464,6 @@ bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com
 			Game_Map::SetNeedRefresh(true);
 		}
 	}
-
-	return true;
 }
 
 int Game_Interpreter::OperateValue(int operation, int operand_type, int operand) {
@@ -3403,6 +3410,19 @@ bool Game_Interpreter::CommandChangeMainMenuAccess(lcf::rpg::EventCommand const&
 }
 
 bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& com) { // Code 12010
+	bool result = EvalCondBranch(com);
+
+	int sub_idx = subcommand_sentinel;
+	if (!result) {
+		sub_idx = eOptionBranchElse;
+		SkipToNextConditional({ Cmd::ElseBranch, Cmd::EndBranch }, com.indent);
+	}
+
+	SetSubcommandIndex(com.indent, sub_idx);
+	return true;
+}
+
+bool Game_Interpreter::EvalCondBranch(lcf::rpg::EventCommand const& com) {
 	const auto& frame = GetFrame();
 
 	bool result = false;
