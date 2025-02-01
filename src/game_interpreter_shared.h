@@ -89,8 +89,9 @@ namespace Game_Interpreter_Shared {
 
 		eVarOperand_EasyRpg_DateTime,
 		eVarOperand_EasyRpg_InspectMapInfo,
+		eVarOperand_EasyRpg_MessageSystemState,		// get info about message system options
+		eVarOperand_EasyRpg_MessageWindowState,		// get info about active message windows
 		// Reserved / Not implemented
-		eVarOperand_EasyRpg_MessageState,	// get info about active message windows
 		eVarOperand_EasyRpg_RngFixedSeed,	// reproducible rng (+ options for rng dependent on map/event ?)
 		//
 

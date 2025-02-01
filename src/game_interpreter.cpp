@@ -1427,7 +1427,96 @@ namespace EvalControlVarOp {
 				return 0;
 			}
 			default:
-				Output::Warning("InspectMapUnit: Unknown op '{}'", com.parameters[param_offset]);
+				Output::Warning("InspectMapInfo: Unknown op '{}'", com.parameters[param_offset]);
+		}
+
+		return 0;
+	}
+
+	enum MessageSystemStateOp {
+		IsMessageTransparent = 0,
+		IsMessagePositionFixed,
+		IsContinueEvents,
+		MessagePosition,
+		IsMessageFaceRightPosition
+	};
+
+	template <int param_offset>
+	static inline int MessageSystemState(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+
+		switch (static_cast<MessageSystemStateOp>(com.parameters[param_offset]))
+		{
+			case MessageSystemStateOp::IsMessageTransparent:
+				return Main_Data::game_system->IsMessageTransparent();
+			case MessageSystemStateOp::IsMessagePositionFixed:
+				return Main_Data::game_system->IsMessagePositionFixed();
+			case MessageSystemStateOp::IsContinueEvents:
+				return Main_Data::game_system->GetMessageContinueEvents();
+			case MessageSystemStateOp::MessagePosition:
+				return Main_Data::game_system->GetMessagePosition();
+			case MessageSystemStateOp::IsMessageFaceRightPosition:
+				return Main_Data::game_system->IsMessageFaceRightPosition();
+			default:
+			{
+				Output::Warning("MessageSystemState: Unknown op '{}'", com.parameters[param_offset]);
+			}
+		}
+		return 0;
+	}
+
+	enum MessageWindowStateOp {
+		IsMessageActive = 0,
+		IsFaceActive,
+		CanContinue,
+		WindowTop,
+		WindowLeft,
+		WindowBottom,
+		WindowRight,
+		WindowWidth,
+		WindowHeight,
+		WindowType
+	};
+
+	template <int param_offset>
+	static inline int MessageWindowState(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+
+		if (com.parameters[param_offset] == static_cast<int>(MessageWindowStateOp::IsMessageActive)) {
+			return Game_Message::IsMessageActive();
+		}
+
+		auto* window = Game_Message::GetWindow();
+		if (window) {
+			switch (static_cast<MessageWindowStateOp>(com.parameters[param_offset]))
+			{
+				case MessageWindowStateOp::IsFaceActive:
+					return window->GetPendingMessage().IsFaceEnabled() && !Main_Data::game_system->GetMessageFaceName().empty();
+				case MessageWindowStateOp::CanContinue:
+					return !window->GetPause();
+				case MessageWindowStateOp::WindowTop:
+					return window->GetY();
+				case MessageWindowStateOp::WindowLeft:
+					return window->GetX();
+				case MessageWindowStateOp::WindowBottom:
+					return window->GetY() + window->GetHeight();
+				case MessageWindowStateOp::WindowRight:
+					return window->GetX() + window->GetWidth();
+				case MessageWindowStateOp::WindowWidth:
+					return window->GetWidth();
+				case MessageWindowStateOp::WindowHeight:
+					return window->GetHeight();
+				case MessageWindowStateOp::WindowType:
+					if (window->GetPendingMessage().HasChoices())
+						return 1;
+					if (window->GetPendingMessage().HasNumberInput())
+						return 2;
+					if (window->GetPendingMessage().ShowGoldWindow())
+						return 3;
+					return 0;
+				default:
+				{
+					Output::Warning("MessageWindowState: Unknown op '{}'", com.parameters[param_offset]);
+				}
+			}
 		}
 
 		return 0;
@@ -5772,6 +5861,8 @@ namespace DispatchTable_VarOp {
 		if (includeEasyRpgEx) {
 			ops[eVarOperand_EasyRpg_DateTime] = &DateTime<get_param_offset(op_type)>;
 			ops[eVarOperand_EasyRpg_InspectMapInfo] = &InspectMapInfo<get_param_offset(op_type)>;
+			ops[eVarOperand_EasyRpg_MessageSystemState] = &MessageSystemState<get_param_offset(op_type)>;
+			ops[eVarOperand_EasyRpg_MessageWindowState] = &MessageWindowState<get_param_offset(op_type)>;
 		}
 
 		dispatch_table_varoperand* dispatch_table = new dispatch_table_varoperand(get_param_operand(op_type), (int)patch_flags.to_ulong(), ops, &varOperand_DefaultCase<op_type>);
