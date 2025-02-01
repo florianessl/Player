@@ -1060,15 +1060,12 @@ bool Game_Interpreter::CommandControlSwitches(lcf::rpg::EventCommand const& com)
 }
 
 bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com) { // code 10220
+
+	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
+	static const auto dispatch_table = DispatchTable_VarOp::BuildDispatchTable<DispatchTable_VarOp::eControlVarOp_Default>(Player::IsPatchManiac(), false, false);
+
 	int value = 0;
-	int operand = com.parameters[4];
-
-	if (EP_UNLIKELY(operand >= 9 && !Player::IsPatchManiac())) {
-		Output::Warning("ControlVariables: Unsupported operand {}", operand);
-		return true;
-	}
-
-	if (!EvalControlVarOp(value, operand, com))
+	if (!dispatch_table.Execute(value, com, *this))
 		return true;
 
 	int start, end;
@@ -1087,194 +1084,190 @@ bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com
 	return true;
 }
 
-bool Game_Interpreter::EvalControlVarOp(int&value, int operand, lcf::rpg::EventCommand const& com) {
-	switch (operand) {
-		case 0:
-			// Constant
-			value = com.parameters[5];
-			break;
-		case 1:
-			// Var A ops B
-			value = Main_Data::game_variables->Get(com.parameters[5]);
-			break;
-		case 2:
-			// Number of var A ops B
-			value = Main_Data::game_variables->GetIndirect(com.parameters[5]);
-			break;
-		case 3: {
-			// Random between range
-			int32_t arg1 = com.parameters[5];
-			int32_t arg2 = com.parameters[6];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				arg1 = ValueOrVariableBitfield(com.parameters[7], 0, arg1);
-				arg2 = ValueOrVariableBitfield(com.parameters[7], 1, arg2);
-			}
+namespace EvalControlVarOp {
+	using Main_Data::game_switches, Main_Data::game_variables;
 
-			value = ControlVariables::Random(arg1, arg2);
-			break;
-		}
-		case 4: {
-			// Items
-			int item = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				item = ValueOrVariable(com.parameters[7], item);
-			}
-
-			value = ControlVariables::Item(com.parameters[6], item);
-			break;
-		}
-		case 5: { // Hero
-			int actor_id = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				actor_id = ValueOrVariable(com.parameters[7], actor_id);
-			}
-			if (Player::IsPatchManiac()) {
-				value = ControlVariables::Actor<true>(com.parameters[6], actor_id);
-			} else {
-				value = ControlVariables::Actor<false>(com.parameters[6], actor_id);
-			}
-			break;
-		}
-		case 6: {
-			// Characters
-			int event_id = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				event_id = ValueOrVariable(com.parameters[7], event_id);
-			}
-			if (Player::IsPatchManiac()) {
-				value = ControlVariables::Event<true>(com.parameters[6], event_id, *this);
-			} else {
-				value = ControlVariables::Event<false>(com.parameters[6], event_id, *this);
-			}
-			break;
-		}
-		case 7:
-			// More
-			if (Player::IsPatchManiac()) {
-				value = ControlVariables::Other<true>(com.parameters[5]);
-			} else {
-				value = ControlVariables::Other<false>(com.parameters[5]);
-			}
-			break;
-		case 8: {
-			int enemy_id = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				enemy_id = ValueOrVariable(com.parameters[7], enemy_id);
-			}
-
-			// Battle related
-			if (Player::IsPatchManiac()) {
-				value = ControlVariables::Enemy<true>(com.parameters[6], enemy_id);
-			} else {
-				value = ControlVariables::Enemy<false>(com.parameters[6], enemy_id);
-			}
-			break;
-		}
-		case 9: { // Party Member (Maniac)
-			int party_idx = com.parameters[5];
-			if (Player::IsPatchManiac() && com.parameters.size() >= 8) {
-				party_idx = ValueOrVariable(com.parameters[7], party_idx);
-			}
-			value = ControlVariables::Party(com.parameters[6], party_idx);
-			break;
-		}
-		case 10: {
-			// Switch (Maniac)
-			value = com.parameters[5];
-			if (com.parameters[6] == 1) {
-				value = Main_Data::game_switches->GetInt(value);
-			} else {
-				value = Main_Data::game_switches->GetInt(Main_Data::game_variables->Get(value));
-			}
-			break;
-		}
-		case 11: {
-			// Pow (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[6]);
-			value = ControlVariables::Pow(arg1, arg2);
-			break;
-		}
-		case 12: {
-			// Sqrt (Maniac)
-			int arg = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int mul = com.parameters[6];
-			value = ControlVariables::Sqrt(arg, mul);
-			break;
-		}
-		case 13: {
-			// Sin (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[8]);
-			float mul = static_cast<float>(com.parameters[6]);
-			value = ControlVariables::Sin(arg1, arg2, mul);
-			break;
-		}
-		case 14: {
-			// Cos (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[8]);
-			int mul = com.parameters[6];
-			value = ControlVariables::Cos(arg1, arg2, mul);
-			break;
-		}
-		case 15: {
-			// Atan2 (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[8], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[8], 1, com.parameters[6]);
-			int mul = com.parameters[7];
-			value = ControlVariables::Atan2(arg1, arg2, mul);
-			break;
-		}
-		case 16: {
-			// Min (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[6]);
-			value = ControlVariables::Min(arg1, arg2);
-			break;
-		}
-		case 17: {
-			// Max (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[7], 0, com.parameters[5]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[7], 1, com.parameters[6]);
-			value = ControlVariables::Max(arg1, arg2);
-			break;
-		}
-		case 18: {
-			// Abs (Maniac)
-			int arg = ValueOrVariableBitfield(com.parameters[6], 0, com.parameters[5]);
-			value = ControlVariables::Abs(arg);
-			break;
-		}
-		case 19: {
-			// Binary (Maniac)
-			int arg1 = ValueOrVariableBitfield(com.parameters[8], 0, com.parameters[6]);
-			int arg2 = ValueOrVariableBitfield(com.parameters[8], 1, com.parameters[7]);
-			value = ControlVariables::Binary(com.parameters[5], arg1, arg2);
-			break;
-		}
-		case 20: {
-			// Ternary (Maniac)
-			int mode = com.parameters[10];
-			int arg1 = ValueOrVariableBitfield(mode, 0, com.parameters[6]);
-			int arg2 = ValueOrVariableBitfield(mode, 1, com.parameters[7]);
-			int op = com.parameters[5];
-			if (CheckOperator(arg1, arg2, op)) {
-				value = ValueOrVariableBitfield(mode, 2, com.parameters[8]);
-			} else {
-				value = ValueOrVariableBitfield(mode, 3, com.parameters[9]);
-			}
-			break;
-		}
-		case 21:
-			// Expression (Maniac)
-			value = ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(6, com.parameters[5]), *this);
-			break;
-		default:
-			Output::Warning("ControlVariables: Unsupported operand {}", operand);
-			return false;
+	template <int param_offset>
+	int Constant(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		return com.parameters[param_offset];
 	}
-	return true;
+
+	template <int param_offset>
+	int Variable(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		return game_variables->Get(com.parameters[param_offset]);
+	}
+
+	template <int param_offset>
+	int VariableIndirect(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		return game_variables->GetIndirect(com.parameters[param_offset]);
+	}
+
+	template <int param_offset, bool Maniac>
+	int Random(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int32_t arg1 = com.parameters[param_offset];
+		int32_t arg2 = com.parameters[param_offset + 1];
+		if constexpr (Maniac) {
+			if (com.parameters.size() >= (param_offset + 3)) {
+				arg1 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 0, arg1, interpreter);
+				arg2 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 1, arg2, interpreter);
+			}
+		}
+
+		return ControlVariables::Random(arg1, arg2);
+	}
+
+	template <int param_offset, bool Maniac>
+	int Item(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int item = com.parameters[param_offset];
+		if constexpr (Maniac) {
+			if (com.parameters.size() >= (param_offset + 3)) {
+				item = ValueOrVariable(com.parameters[param_offset + 2], item, interpreter);
+			}
+		}
+
+		return ControlVariables::Item(com.parameters[param_offset + 1], item);
+	}
+
+	template <int param_offset, bool Maniac>
+	int Actor(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int actor_id = com.parameters[param_offset];
+		if constexpr (Maniac) {
+			if (com.parameters.size() >= (param_offset + 3)) {
+				actor_id = ValueOrVariable(com.parameters[param_offset + 2], actor_id, interpreter);
+			}
+		}
+		return ControlVariables::Actor<Maniac>(com.parameters[param_offset + 1], actor_id);
+	}
+
+	template <int param_offset, bool Maniac>
+	int Event(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int event_id = com.parameters[param_offset];
+		if constexpr (Maniac) {
+			if (com.parameters.size() >= (param_offset + 3)) {
+				event_id = ValueOrVariable(com.parameters[param_offset + 2], event_id, interpreter);
+			}
+		}
+		return ControlVariables::Event<Maniac>(com.parameters[param_offset + 1], event_id, interpreter);
+	}
+
+	template <int param_offset, bool Maniac>
+	int Other(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		return ControlVariables::Other<Maniac>(com.parameters[param_offset]);
+	}
+
+	template <int param_offset, bool Maniac>
+	int Enemy(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int enemy_id = com.parameters[param_offset];
+		if constexpr (Maniac) {
+			if (com.parameters.size() >= (param_offset + 3)) {
+				enemy_id = ValueOrVariable(com.parameters[param_offset + 2], enemy_id, interpreter);
+			}
+		}
+
+		return ControlVariables::Event<Maniac>(com.parameters[param_offset + 1], enemy_id, interpreter);
+	}
+
+	template <int param_offset>
+	int Party(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int party_idx = com.parameters[param_offset];
+		if (com.parameters.size() >= (param_offset + 3)) {
+			party_idx = ValueOrVariable(com.parameters[param_offset + 2], party_idx, interpreter);
+		}
+		return ControlVariables::Party(com.parameters[param_offset + 1], party_idx);
+	}
+
+	template <int param_offset>
+	int Switch(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int value = com.parameters[param_offset];
+		if (com.parameters[param_offset + 1] == 1) {
+			value = game_switches->GetInt(value);
+		} else {
+			value = game_switches->GetInt(game_variables->Get(value));
+		}
+		return value;
+	}
+
+	template <int param_offset>
+	int Pow(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int arg1 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 0, com.parameters[param_offset], interpreter);
+		int arg2 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 1, com.parameters[param_offset + 1], interpreter);
+		return ControlVariables::Pow(arg1, arg2);
+	}
+
+	template <int param_offset>
+	int Sqrt(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int arg = ValueOrVariableBitfield(com.parameters[param_offset + 2], 0, com.parameters[param_offset], interpreter);
+		int mul = com.parameters[param_offset + 1];
+		return ControlVariables::Sqrt(arg, mul);
+	}
+
+	template <int param_offset>
+	int Sin(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int arg1 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 0, com.parameters[param_offset], interpreter);
+		int arg2 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 1, com.parameters[param_offset + 3], interpreter);
+		float mul = static_cast<float>(com.parameters[param_offset + 1]);
+		return ControlVariables::Sin(arg1, arg2, mul);
+	}
+
+	template <int param_offset>
+	int Cos(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int arg1 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 0, com.parameters[param_offset], interpreter);
+		int arg2 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 1, com.parameters[param_offset + 3], interpreter);
+		int mul = com.parameters[param_offset + 1];
+		return ControlVariables::Cos(arg1, arg2, mul);
+	}
+
+	template <int param_offset>
+	int Atan2(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int arg1 = ValueOrVariableBitfield(com.parameters[param_offset + 3], 0, com.parameters[param_offset], interpreter);
+		int arg2 = ValueOrVariableBitfield(com.parameters[param_offset + 3], 1, com.parameters[param_offset + 1], interpreter);
+		int mul = com.parameters[param_offset + 2];
+		return ControlVariables::Atan2(arg1, arg2, mul);
+	}
+
+	template <int param_offset>
+	int Min(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int arg1 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 0, com.parameters[param_offset], interpreter);
+		int arg2 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 1, com.parameters[param_offset + 1], interpreter);
+		return ControlVariables::Min(arg1, arg2);
+	}
+
+	template <int param_offset>
+	int Max(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int arg1 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 0, com.parameters[param_offset], interpreter);
+		int arg2 = ValueOrVariableBitfield(com.parameters[param_offset + 2], 1, com.parameters[param_offset + 1], interpreter);
+		return ControlVariables::Max(arg1, arg2);
+	}
+
+	template <int param_offset>
+	int Abs(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int arg = ValueOrVariableBitfield(com.parameters[param_offset + 1], 0, com.parameters[param_offset], interpreter);
+		return ControlVariables::Abs(arg);
+	}
+
+	template <int param_offset>
+	int Binary(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int arg1 = ValueOrVariableBitfield(com.parameters[param_offset + 3], 0, com.parameters[param_offset + 1], interpreter);
+		int arg2 = ValueOrVariableBitfield(com.parameters[param_offset + 3], 1, com.parameters[param_offset + 2], interpreter);
+		return ControlVariables::Binary(com.parameters[param_offset], arg1, arg2);
+	}
+
+	template <int param_offset>
+	int Ternary(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int mode = com.parameters[param_offset + 5];
+		int arg1 = ValueOrVariableBitfield(mode, 0, com.parameters[param_offset + 1], interpreter);
+		int arg2 = ValueOrVariableBitfield(mode, 1, com.parameters[param_offset + 2], interpreter);
+		int op = com.parameters[param_offset];
+		if (CheckOperator(arg1, arg2, op)) {
+			return ValueOrVariableBitfield(mode, 2, com.parameters[param_offset + 3], interpreter);
+		}
+		return ValueOrVariableBitfield(mode, 3, com.parameters[param_offset + 4], interpreter);
+	}
+
+	template <int param_offset>
+	static inline int Expression(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter)	{
+		return ManiacPatch::ParseExpression(MakeSpan(com.parameters).subspan(param_offset + 1, com.parameters[param_offset]), interpreter);
+	}
 }
 
 void Game_Interpreter::PerformVarOp(int value, int start, int end, lcf::rpg::EventCommand const& com) {
@@ -5543,4 +5536,125 @@ int Game_Interpreter::ManiacBitmask(int value, int mask) const {
 	}
 
 	return value;
+}
+
+namespace DispatchTable_VarOp {
+	static bool dispatch_table_default_case_triggered = false;
+
+	std::array<dispatch_table_varoperand*, eControlVarOp_LAST> tables = {};
+
+	constexpr StringView get_op_name(CommandType op_type) {
+		switch (op_type) {
+			case CommandType::eControlVarOp_Default:
+				return "ControlVariables";
+			case CommandType::eControlVarOp_Ex:
+				return "ControlVariablesEx";
+			case CommandType::eControlVarOp_Scoped:
+				return "ControlScopedVariables";
+			default:
+				return "";
+		}
+	};
+
+	constexpr int get_param_operand(CommandType op_type) {
+		switch (op_type) {
+			case CommandType::eControlVarOp_Default:
+				return 4;
+			case CommandType::eControlVarOp_Ex:
+				return 4;
+			case CommandType::eControlVarOp_Scoped:
+				return 4;
+			default:
+				return 4;
+		}
+	};
+
+	constexpr int get_param_offset(CommandType op_type) {
+		switch (op_type) {
+			case CommandType::eControlVarOp_Default:
+				return 5;
+			case CommandType::eControlVarOp_Ex:
+				return 5;
+			case CommandType::eControlVarOp_Scoped:
+				return 8;
+			default:
+				return 5;
+		}
+	};
+
+	template <CommandType op_type>
+	int varOperand_DefaultCase(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const&) {
+		dispatch_table_default_case_triggered = true;
+		Output::Warning("{}: Unsupported operand {}", get_op_name(op_type), com.parameters[get_param_operand(op_type)]);
+		return 0;
+	};
+
+	EP_ALWAYS_INLINE bool dispatch_table_varoperand::Execute(int& value_out, lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) const {
+		const std::byte operand = static_cast<std::byte>(com.parameters[param_operand]);
+		value_out = ops[std::to_integer<int>(operand)](com, interpreter);
+
+		if (EP_UNLIKELY(dispatch_table_default_case_triggered)) {
+			dispatch_table_default_case_triggered = false;
+			return false;
+		}
+		return true;
+	}
+
+	template <CommandType op_type>
+	const dispatch_table_varoperand& BuildDispatchTable(const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx) {
+
+		static_assert(op_type >= eControlVarOp_Default && op_type < eControlVarOp_LAST);
+		assert(tables[static_cast<int>(op_type)] == nullptr);
+
+		std::bitset<16> patch_flags;
+		patch_flags.set(1, includeManiacs_200128);
+		patch_flags.set(2, includeManiacs24xxxx);
+		patch_flags.set(3, includeEasyRpgEx);
+
+		std::map<ControlVarOperand, varOperand_Func> ops;
+
+		using namespace EvalControlVarOp;
+
+		// Vanilla operands
+		ops[eVarOperand_Constant] = &Constant<get_param_offset(op_type)>;
+		ops[eVarOperand_Variable] = &Variable<get_param_offset(op_type)>;
+		ops[eVarOperand_VariableIndirect] = &VariableIndirect<get_param_offset(op_type)>;
+		if (includeManiacs_200128) {
+			ops[eVarOperand_RandomBetweenRange] = &Random<get_param_offset(op_type), true>;
+			ops[eVarOperand_Items] = &Item<get_param_offset(op_type), true>;
+			ops[eVarOperand_Actors] = &Actor<get_param_offset(op_type), true>;
+			ops[eVarOperand_Events] = &Event<get_param_offset(op_type), true>;
+			ops[eVarOperand_Other] = &Other<get_param_offset(op_type), true>;
+			ops[eVarOperand_Battle_Enemies] = &Enemy<get_param_offset(op_type), true>;
+		} else {
+			ops[eVarOperand_RandomBetweenRange] = &Random<get_param_offset(op_type), false>;
+			ops[eVarOperand_Items] = &Item<get_param_offset(op_type), false>;
+			ops[eVarOperand_Actors] = &Actor<get_param_offset(op_type), false>;
+			ops[eVarOperand_Events] = &Event<get_param_offset(op_type), false>;
+			ops[eVarOperand_Other] = &Other<get_param_offset(op_type), false>;
+			ops[eVarOperand_Battle_Enemies] = &Enemy<get_param_offset(op_type), false>;
+		}
+		// end Vanilla operands
+
+		if (includeManiacs_200128) {
+			ops[eVarOperand_Maniacs_Party] = &Party<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Switch] = &Switch<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Pow] = &Pow<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Sqrt] = &Sqrt<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Sin] = &Sin<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Cos] = &Cos<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Atan2] = &Atan2<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Min] = &Min<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Max] = &Max<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Abs] = &Abs<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Binary] = &Binary<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Ternary] = &Ternary<get_param_offset(op_type)>;
+			ops[eVarOperand_Maniacs_Expression] = &Expression<get_param_offset(op_type)>;
+		}
+
+		dispatch_table_varoperand* dispatch_table = new dispatch_table_varoperand(get_param_operand(op_type), (int)patch_flags.to_ulong(), ops, &varOperand_DefaultCase<op_type>);
+		tables[static_cast<int>(op_type)] = dispatch_table;
+
+		return *dispatch_table;
+	}
 }
