@@ -88,7 +88,8 @@ namespace Game_Interpreter_Shared {
 		eVarOperand_EasyRpg_CountScopedVarsMatchingCondition_MapEvent,
 
 		eVarOperand_EasyRpg_DateTime,
-		eVarOperand_EasyRpg_InspectMapInfo,
+		eVarOperand_EasyRpg_ActiveMapInfo,			// get extended info on the current map
+		eVarOperand_EasyRpg_InspectMapTreeInfo,		
 		eVarOperand_EasyRpg_MessageSystemState,		// get info about message system options
 		eVarOperand_EasyRpg_MessageWindowState,		// get info about active message windows
 		// Reserved / Not implemented

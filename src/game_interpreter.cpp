@@ -1324,12 +1324,33 @@ namespace EvalControlVarOp {
 		return 0;
 	}
 
-	enum InspectMapInfoOp {
+	enum ActiveMapInfoOp {
 		MapTileWidth = 0,
 		MapTileHeight,
-		ParentMap,
 		LoopHorizontal,
-		LoopVertical,
+		LoopVertical
+	};
+
+	template <int param_offset>
+	static inline int ActiveMapInfo(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		switch (static_cast<ActiveMapInfoOp>(com.parameters[param_offset]))
+		{
+			case ActiveMapInfoOp::MapTileWidth:
+				return Game_Map::GetTilesX();
+			case ActiveMapInfoOp::MapTileHeight:
+				return Game_Map::GetTilesY();
+			case ActiveMapInfoOp::LoopHorizontal:
+				return Game_Map::LoopHorizontal();
+			case ActiveMapInfoOp::LoopVertical:
+				return Game_Map::LoopVertical();
+			default:
+				Output::Warning("ActiveMapInfo: Unknown op '{}'", com.parameters[param_offset]);
+		}
+
+		return 0;
+	}
+	enum InspectMapTreeInfoOp {
+		ParentMap = 0,
 		OriginalEncounterSteps,
 		CountTroops,
 		CountArenas,
@@ -1343,27 +1364,25 @@ namespace EvalControlVarOp {
 	};
 
 	template <int param_offset>
-	static inline int InspectMapInfo(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+	static inline int InspectMapTreeInfo(lcf::rpg::EventCommand const& com, Game_BaseInterpreterContext const& interpreter) {
+		int map_id = ValueOrVariableBitfield(com.parameters[param_offset + 3], 0, com.parameters[param_offset + 1], interpreter);
+		if (map_id == 0) {
+			map_id = Game_Map::GetMapId();
+		}
+		auto& map_info = Game_Map::GetMapInfo(map_id);
+		if (map_info.ID == 0) {
+			return 0;
+		}
 
-		auto& map_info = Game_Map::GetMapInfo();
-
-		switch (static_cast<InspectMapInfoOp>(com.parameters[param_offset]))
+		switch (static_cast<InspectMapTreeInfoOp>(com.parameters[param_offset]))
 		{
-			case InspectMapInfoOp::MapTileWidth:
-				return Game_Map::GetTilesX();
-			case InspectMapInfoOp::MapTileHeight:
-				return Game_Map::GetTilesY();
-			case InspectMapInfoOp::ParentMap:
+			case InspectMapTreeInfoOp::ParentMap:
 				return map_info.parent_map;
-			case InspectMapInfoOp::LoopHorizontal:
-				return Game_Map::LoopHorizontal();
-			case InspectMapInfoOp::LoopVertical:
-				return Game_Map::LoopVertical();
-			case InspectMapInfoOp::OriginalEncounterSteps:
+			case InspectMapTreeInfoOp::OriginalEncounterSteps:
 				return map_info.encounter_steps;
-			case InspectMapInfoOp::CountTroops:
+			case InspectMapTreeInfoOp::CountTroops:
 				return map_info.encounters.size();;
-			case InspectMapInfoOp::CountArenas:
+			case InspectMapTreeInfoOp::CountArenas:
 			{
 				int cnt_arenas = 0;
 				for (unsigned int i = 0; i < lcf::Data::treemap.maps.size(); ++i) {
@@ -1374,23 +1393,24 @@ namespace EvalControlVarOp {
 				}
 				return cnt_arenas;
 			}
-			case InspectMapInfoOp::Troop_Id:
+			case InspectMapTreeInfoOp::Troop_Id:
 			{
-				int monster_no = com.parameters[param_offset + 1];
-				monster_no = ValueOrVariable(com.parameters[param_offset + 2], monster_no, interpreter);
+				// TODO: provide a way to conveniently copy values into a range of variables ("ControlVarArrayEx"?) 
+				int monster_no = ValueOrVariableBitfield(com.parameters[param_offset + 3], 1, com.parameters[param_offset + 2], interpreter);
 				if (monster_no >= 0 && monster_no < map_info.encounters.size()) {
 					return map_info.encounters[monster_no].troop_id;
 				}
 				return 0;
 			}
-			case InspectMapInfoOp::Arena_Top:
-			case InspectMapInfoOp::Arena_Left:
-			case InspectMapInfoOp::Arena_Bottom:
-			case InspectMapInfoOp::Arena_Right:
-			case InspectMapInfoOp::Arena_Width:
-			case InspectMapInfoOp::Arena_Height:
+			case InspectMapTreeInfoOp::Arena_Top:
+			case InspectMapTreeInfoOp::Arena_Left:
+			case InspectMapTreeInfoOp::Arena_Bottom:
+			case InspectMapTreeInfoOp::Arena_Right:
+			case InspectMapTreeInfoOp::Arena_Width:
+			case InspectMapTreeInfoOp::Arena_Height:
 			{
-				int arena_no = com.parameters[param_offset + 1];
+				// TODO: provide a way to conveniently copy values into a range of variables ("ControlVarArrayEx"?) 
+				int arena_no = ValueOrVariableBitfield(com.parameters[param_offset + 3], 1, com.parameters[param_offset + 2], interpreter);
 				arena_no = ValueOrVariable(com.parameters[param_offset + 2], arena_no, interpreter);
 
 				if (arena_no < 0) {
@@ -1405,19 +1425,19 @@ namespace EvalControlVarOp {
 							cnt_arenas++;
 							continue;
 						}
-						switch (static_cast<InspectMapInfoOp>(com.parameters[param_offset]))
+						switch (static_cast<InspectMapTreeInfoOp>(com.parameters[param_offset]))
 						{
-							case InspectMapInfoOp::Arena_Top:
+							case InspectMapTreeInfoOp::Arena_Top:
 								return map.area_rect.t;
-							case InspectMapInfoOp::Arena_Left:
+							case InspectMapTreeInfoOp::Arena_Left:
 								return map.area_rect.l;
-							case InspectMapInfoOp::Arena_Bottom:
+							case InspectMapTreeInfoOp::Arena_Bottom:
 								return map.area_rect.b;
-							case InspectMapInfoOp::Arena_Right:
+							case InspectMapTreeInfoOp::Arena_Right:
 								return map.area_rect.r;
-							case InspectMapInfoOp::Arena_Width:
+							case InspectMapTreeInfoOp::Arena_Width:
 								return map.area_rect.r - map.area_rect.l;
-							case InspectMapInfoOp::Arena_Height:
+							case InspectMapTreeInfoOp::Arena_Height:
 								return map.area_rect.b - map.area_rect.t;
 							default:
 								return 0;
@@ -1427,7 +1447,7 @@ namespace EvalControlVarOp {
 				return 0;
 			}
 			default:
-				Output::Warning("InspectMapInfo: Unknown op '{}'", com.parameters[param_offset]);
+				Output::Warning("InspectMapTreeInfo: Unknown op '{}'", com.parameters[param_offset]);
 		}
 
 		return 0;
@@ -5860,7 +5880,8 @@ namespace DispatchTable_VarOp {
 
 		if (includeEasyRpgEx) {
 			ops[eVarOperand_EasyRpg_DateTime] = &DateTime<get_param_offset(op_type)>;
-			ops[eVarOperand_EasyRpg_InspectMapInfo] = &InspectMapInfo<get_param_offset(op_type)>;
+			ops[eVarOperand_EasyRpg_ActiveMapInfo] = &ActiveMapInfo<get_param_offset(op_type)>;
+			ops[eVarOperand_EasyRpg_InspectMapTreeInfo] = &InspectMapTreeInfo<get_param_offset(op_type)>;
 			ops[eVarOperand_EasyRpg_MessageSystemState] = &MessageSystemState<get_param_offset(op_type)>;
 			ops[eVarOperand_EasyRpg_MessageWindowState] = &MessageWindowState<get_param_offset(op_type)>;
 		}
