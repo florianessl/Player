@@ -38,6 +38,14 @@ class Game_Event;
 class Game_CommonEvent;
 class PendingMessage;
 
+namespace DispatchTable_VarOp {
+	class dispatch_table_varoperand;
+}
+
+namespace DispatchTable_CondBranch {
+	class dispatch_table_condition;
+}
+
 /**
  * Game_Interpreter class
  */
@@ -80,6 +88,7 @@ public:
 	bool ExecuteCommand();
 	virtual bool ExecuteCommand(lcf::rpg::EventCommand const& com);
 
+	static void RebuildStaticDispatchTables();
 
 	/**
 	 * Returns the interpreters current state information.
@@ -353,6 +362,9 @@ protected:
 	KeyInputState _keyinput;
 	AsyncOp _async_op = {};
 
+	const DispatchTable_VarOp::dispatch_table_varoperand* dispatch_controlvars;
+	const DispatchTable_CondBranch::dispatch_table_condition* dispatch_conditionalbranch;
+
 	friend class Scene_Debug;
 };
 
@@ -399,6 +411,8 @@ namespace DispatchTable_VarOp {
 
 	template <CommandType op_type>
 	const dispatch_table_varoperand& BuildDispatchTable(const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx);
+
+	void RebuildDispatchTables(const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx);
 }
 
 namespace DispatchTable_CondBranch {
@@ -443,6 +457,8 @@ namespace DispatchTable_CondBranch {
 
 	template <CommandType op_type>
 	dispatch_table_condition& BuildDispatchTable(const bool include2k3Commands, const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx);
+
+	void RebuildDispatchTables(const bool include2k3Commands, const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx);
 }
 
 inline const lcf::rpg::SaveEventExecFrame* Game_Interpreter::GetFramePtr() const {

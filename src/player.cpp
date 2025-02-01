@@ -940,6 +940,8 @@ void Player::ResetGameObjects() {
 	Main_Data::game_system->ReloadSystemGraphic();
 
 	Input::ResetMask();
+
+	Game_Interpreter::RebuildStaticDispatchTables();
 }
 
 static bool DefaultLmuStartFileExists(const FilesystemView& fs) {

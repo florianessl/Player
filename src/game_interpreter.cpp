@@ -74,12 +74,18 @@
 
 using namespace Game_Interpreter_Shared;
 
+static const auto* global_dispatch_controlvars = &DispatchTable_VarOp::BuildDispatchTable<DispatchTable_VarOp::eControlVarOp_Default>(false, false, false);
+static const auto* global_dispatch_conditionalbranch = &DispatchTable_CondBranch::BuildDispatchTable<DispatchTable_CondBranch::eCondBranch_Default>(false, false, false, false);
+
 enum BranchSubcommand {
 	eOptionBranchElse = 1
 };
 
 Game_Interpreter::Game_Interpreter(bool _main_flag) {
 	main_flag = _main_flag;
+
+	dispatch_controlvars = global_dispatch_controlvars;
+	dispatch_conditionalbranch = global_dispatch_conditionalbranch;
 
 	Clear();
 }
@@ -1066,11 +1072,8 @@ bool Game_Interpreter::CommandControlSwitches(lcf::rpg::EventCommand const& com)
 }
 
 bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com) { // code 10220
-	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
-	static const auto dispatch_table = DispatchTable_VarOp::BuildDispatchTable<DispatchTable_VarOp::eControlVarOp_Default>(Player::IsPatchManiac(), false, false);
-
 	int value = 0;
-	if (!dispatch_table.Execute(value, com, *this))
+	if (!dispatch_controlvars->Execute(value, com, *this))
 		return true;
 
 	int start, end;
@@ -3424,10 +3427,7 @@ bool Game_Interpreter::CommandChangeMainMenuAccess(lcf::rpg::EventCommand const&
 }
 
 bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& com) { // Code 12010
-	//FIXME: If dynamic changing of patch flags mid-game was enabled, then the jump tables would need to be rebuilt
-	static const auto dispatch_table = DispatchTable_CondBranch::BuildDispatchTable<DispatchTable_CondBranch::eCondBranch_Default>(Player::IsRPG2k3Commands(), Player::IsPatchManiac(), false, false);
-
-	bool result = dispatch_table.Execute(com, *this);
+	bool result = dispatch_conditionalbranch->Execute(com, *this);
 
 	int sub_idx = subcommand_sentinel;
 	if (!result) {
@@ -5338,6 +5338,8 @@ bool Game_Interpreter::CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand c
 	if (flag_name == "rpg2k-battle")
 		lcf::Data::system.easyrpg_use_rpg2k_battle_system = flag_value;
 
+	RebuildStaticDispatchTables();
+
 	return true;
 }
 
@@ -5616,6 +5618,26 @@ namespace DispatchTable_VarOp {
 
 		return *dispatch_table;
 	}
+
+	void RebuildDispatchTables(const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx) {
+		std::bitset<16> bitset;
+		bitset.set(1, includeManiacs_200128);
+		bitset.set(2, includeManiacs24xxxx);
+		bitset.set(3, includeEasyRpgEx);
+
+		const int patch_flags_new = (int)bitset.to_ulong();
+
+		//note: with C++20 we could just write a templated lambda here
+
+		bool rebuild = tables[eControlVarOp_Default] != nullptr && tables[eControlVarOp_Default]->GetPatchFlags() != patch_flags_new;
+		if (rebuild) {
+			delete tables[eControlVarOp_Default];
+			tables[eControlVarOp_Default] = nullptr;
+		}
+		if (tables[eControlVarOp_Default] == nullptr) {
+			BuildDispatchTable<eControlVarOp_Default>(includeManiacs_200128, includeManiacs24xxxx, includeEasyRpgEx);
+		}
+	}
 }
 
 namespace DispatchTable_CondBranch {
@@ -5698,6 +5720,25 @@ namespace DispatchTable_CondBranch {
 
 		return *dispatch_table;
 	}
+	
+	void RebuildDispatchTables(const bool include2k3Commands, const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx) {
+		std::bitset<16> bitset;
+		bitset.set(1, include2k3Commands);
+		bitset.set(2, includeManiacs_200128);
+		bitset.set(3, includeManiacs24xxxx);
+		bitset.set(4, includeEasyRpgEx);
+
+		const int patch_flags_new = (int)bitset.to_ulong();
+
+		bool rebuild = tables[eCondBranch_Default] != nullptr && tables[eCondBranch_Default]->GetPatchFlags() != patch_flags_new;
+		if (rebuild) {
+			delete tables[eCondBranch_Default];
+			tables[eCondBranch_Default] = nullptr;
+		}
+		if (tables[eCondBranch_Default] == nullptr) {
+			BuildDispatchTable<eCondBranch_Default>(include2k3Commands, includeManiacs_200128, includeManiacs24xxxx, includeEasyRpgEx);
+		}
+	}
 }
 
 bool Game_Interpreter::CommandEasyRpgControlSwitchesEx(lcf::rpg::EventCommand const& com) { // 2021
@@ -5738,6 +5779,11 @@ bool Game_Interpreter::CommandEasyRpgControlSwitchesEx(lcf::rpg::EventCommand co
 	}
 
 	return true;
+}
+
+void Game_Interpreter::RebuildStaticDispatchTables() {
+	DispatchTable_VarOp::RebuildDispatchTables(Player::IsPatchManiac(), false, false);
+	DispatchTable_CondBranch::RebuildDispatchTables(Player::IsRPG2k3Commands(), Player::IsPatchManiac(), false, false);
 }
 
 bool Game_Interpreter::CommandEasyRpgControlVariablesEx(lcf::rpg::EventCommand const& com) { // 2022
