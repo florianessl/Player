@@ -33,6 +33,7 @@
 #include "game_map.h"
 #include "game_event.h"
 #include "game_enemyparty.h"
+#include "game_followers.h"
 #include "game_ineluki.h"
 #include "game_player.h"
 #include "game_targets.h"
@@ -794,6 +795,8 @@ bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CommandEasyRpgCloneMapEvent(com);
 		case Cmd::EasyRpg_DestroyMapEvent:
 			return CommandEasyRpgDestroyMapEvent(com);
+		case Cmd::EasyRpg_ControlFollowers:
+			return CommandEasyRpgControlFollowers(com);
 		default:
 			return true;
 	}
@@ -5507,4 +5510,87 @@ int Game_Interpreter::ManiacBitmask(int value, int mask) const {
 	}
 
 	return value;
+}
+
+bool Game_Interpreter::CommandEasyRpgControlFollowers(lcf::rpg::EventCommand const& com) { // 2028
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	int action_type = com.parameters[0];
+
+	// Global actions that apply to all follower events
+	if (action_type == 0) {
+		switch (com.parameters[1]) {
+			case 1: // Enable followers
+				Game_Followers::SetFollowingEnabled(true);
+				break;
+			case 2: // Disable followers
+				Game_Followers::SetFollowingEnabled(false);
+				break;
+			case 3: // Enable/Disable Toggle
+				Game_Followers::SetFollowingEnabled(!Game_Followers::IsFollowingEnabled());
+				break;
+			case 4: // Reset all followers to Player
+				Game_Followers::ForceResetFollowers();
+				break;
+			case 5: // Freeze all followers in place
+				Game_Followers::SetAllFrozen(true);
+				break;
+			case 6: // Unfreeze all followers
+				Game_Followers::SetAllFrozen(false);
+				break;
+			case 7:
+				Game_Followers::SetAllAutoSync(true);
+				break;
+			case 8:
+				Game_Followers::SetAllAutoSync(false);
+				break;
+			case 9:
+				Game_Followers::SetAllAwaitable(true);
+				break;
+			case 10:
+				Game_Followers::SetAllAwaitable(false);
+				break;
+			case 11: // Manually re-sync all follower graphics
+				Game_Followers::ForceSyncFollowers();
+				break;
+		}
+
+		return true;
+	}
+
+	// Set individual follower properties:
+	if (action_type == 1) {
+		auto target = Game_Followers::GetFollower(com.parameters[2]);
+		if (!target) {
+			Output::Warning("Invalid follower ID {}", com.parameters[2]);
+			return true;
+		}
+
+		bool new_state = com.parameters[3];
+
+		switch (com.parameters[1]) {
+			case 0: // Frozen state
+				target->SetFrozen(new_state);
+				break;
+			case 1: // Auto_Sync state
+				target->SetAutoSync(new_state);
+				break;
+			case 2: // Awaitable state
+				target->SetAwaitable(new_state);
+				//TODO
+				break;
+		}
+
+		return true;
+	}
+
+	if (action_type == 2) { // Formations
+		//TODO
+	}
+
+
+
+	return true;
 }

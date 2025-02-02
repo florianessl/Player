@@ -64,6 +64,7 @@
 #include <lcf/ldb/reader.h>
 #include <lcf/lmt/reader.h>
 #include <lcf/lsd/reader.h>
+#include <lcf/lsd/reader.h>
 #include "main_data.h"
 #include "output.h"
 #include "player.h"
@@ -922,6 +923,7 @@ void Player::ResetGameObjects() {
 	Main_Data::game_actors = std::make_unique<Game_Actors>();
 
 	Game_Map::Init();
+	Game_Followers::Init();
 
 	Main_Data::game_system = std::make_unique<Game_System>();
 	Main_Data::game_targets = std::make_unique<Game_Targets>();
@@ -1104,7 +1106,8 @@ static void OnMapSaveFileReady(FileRequestResult*, lcf::rpg::Save save) {
 			std::move(save.airship_location),
 			std::move(save.foreground_event_execstate),
 			std::move(save.panorama),
-			std::move(save.common_events));
+			std::move(save.common_events),
+			std::move(save.easyrpg_data));
 }
 
 void Player::LoadSavegame(const std::string& save_name, int save_id) {

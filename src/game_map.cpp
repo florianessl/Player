@@ -220,7 +220,8 @@ void Game_Map::SetupFromSave(
 		lcf::rpg::SaveVehicleLocation save_airship,
 		lcf::rpg::SaveEventExecState save_fg_exec,
 		lcf::rpg::SavePanorama save_pan,
-		std::vector<lcf::rpg::SaveCommonEvent> save_ce) {
+		std::vector<lcf::rpg::SaveCommonEvent> save_ce,
+		lcf::rpg::SaveEasyRpgData save_easyrpg) {
 
 	map = std::move(map_in);
 	map_info = std::move(save_map);
@@ -251,6 +252,8 @@ void Game_Map::SetupFromSave(
 	GetVehicle(Game_Vehicle::Boat)->SetSaveData(std::move(save_boat));
 	GetVehicle(Game_Vehicle::Ship)->SetSaveData(std::move(save_ship));
 	GetVehicle(Game_Vehicle::Airship)->SetSaveData(std::move(save_airship));
+
+	Game_Followers::SetupFromSave(save_easyrpg);
 
 	if (is_map_save_compat) {
 		// Make main interpreter "busy" if save contained events to prevent auto-events from starting
@@ -570,6 +573,8 @@ void Game_Map::PrepareSave(lcf::rpg::Save& save) {
 		save.common_events.back().ID = ev.GetIndex();
 		save.common_events.back().parallel_event_execstate = ev.GetSaveData();
 	}
+
+	Game_Followers::PrepareSave(save.easyrpg_data);
 }
 
 void Game_Map::PlayBgm() {
@@ -870,6 +875,7 @@ bool Game_Map::CheckOrMakeWayEx(const Game_Character& self,
 				return false;
 			}
 		}
+		//TODO: check follower collisions
 	}
 	int bit = bit_to;
 	if (self.IsJumping()) {
@@ -1235,11 +1241,7 @@ void Game_Map::Update(MapUpdateAsyncContext& actx, bool is_preupdate) {
 		//If not resuming from async op ...
 		Main_Data::game_player->Update();
 
-		for (auto& vehicle: vehicles) {
-			if (vehicle.GetMapId() == GetMapId()) {
-				vehicle.Update();
-			}
-		}
+		UpdateNonMapCharacters(true);
 	}
 
 	if (!actx.IsActive() || actx.IsMessage()) {
@@ -1273,11 +1275,7 @@ void Game_Map::UpdateProcessedFlags(bool is_preupdate) {
 	}
 	if (!is_preupdate) {
 		Main_Data::game_player->SetProcessed(false);
-		for (auto& vehicle: vehicles) {
-			if (vehicle.IsInCurrentMap()) {
-				vehicle.SetProcessed(false);
-			}
-		}
+		ProcessNonMapCharacters(true, [](Game_Character& ev) { ev.SetProcessed(false); });
 	}
 }
 
@@ -1844,6 +1842,11 @@ bool Game_Map::IsAnyMovePending() {
 			return true;
 		}
 	}
+	for (auto& fw: Game_Followers::GetAllFollowers()) {
+		if (fw.GetMapId() == map_id && check(fw)) {
+			return true;
+		}
+	}
 	for (auto& ev: events) {
 		if (check(ev)) {
 			return true;
@@ -1854,13 +1857,9 @@ bool Game_Map::IsAnyMovePending() {
 }
 
 void Game_Map::RemoveAllPendingMoves() {
-	const auto map_id = GetMapId();
 	Main_Data::game_player->CancelMoveRoute();
-	for (auto& vh: vehicles) {
-		if (vh.GetMapId() == map_id) {
-			vh.CancelMoveRoute();
-		}
-	}
+	ProcessNonMapCharacters(true, [](Game_Character& ev) { ev.CancelMoveRoute(); });
+
 	for (auto& ev: events) {
 		ev.CancelMoveRoute();
 	}
@@ -2229,4 +2228,35 @@ bool Game_Map::Parallax::FakeXPosition() {
 
 bool Game_Map::Parallax::FakeYPosition() {
 	return parallax_fake_y;
+}
+
+template <typename F>
+void Game_Map::ProcessNonMapCharacters(const bool current_map, F&& op) {
+	for (auto& vehicle: vehicles) {
+		if (!current_map || vehicle.IsInCurrentMap()) {
+			op(vehicle);
+		}
+	}
+	if (!Player::HasEasyRpgExtensions()) {
+		return;
+	}
+	for (auto& follower: Game_Followers::GetAllFollowers()) {
+		if (!current_map || follower.IsInCurrentMap()) {
+			op(follower);
+		}
+	}
+}
+
+void Game_Map::UpdateNonMapCharacters(const bool current_map) {
+	for (auto& vehicle: vehicles) {
+		if (!current_map || vehicle.IsInCurrentMap()) {
+			vehicle.Update();
+		}
+	}
+	if (!Player::HasEasyRpgExtensions()) {
+		return;
+	}
+	for (auto& follower: Game_Followers::GetAllFollowers()) {
+		follower.Update();
+	}
 }

@@ -131,6 +131,7 @@ protected:
 	int map_tiles_y = 0;
 
 	bool vehicle_loaded[3] = {};
+	bool followers_loaded[3] = {};
 
 	Tone last_tone;
 };

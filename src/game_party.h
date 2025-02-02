@@ -88,6 +88,10 @@ public:
 	 */
 	int GetActorPositionInParty(int actor_id);
 
+	int GetPartySize() const;
+
+	Game_Actor* GetActorAtPosition(int party_index) const;
+
 	/**
 	 * Gains gold.
 	 *

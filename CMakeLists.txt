@@ -172,6 +172,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/game_enemyparty.h
 	src/game_event.cpp
 	src/game_event.h
+	src/game_followers.cpp
+	src/game_followers.h
 	src/game_ineluki.cpp
 	src/game_ineluki.h
 	src/game_interpreter_battle.cpp

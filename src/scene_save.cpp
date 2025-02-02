@@ -33,6 +33,7 @@
 #include "game_strings.h"
 #include "game_party.h"
 #include "game_actors.h"
+#include "game_followers.h"
 #include "game_system.h"
 #include "game_targets.h"
 #include "game_screen.h"

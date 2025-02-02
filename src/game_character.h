@@ -884,7 +884,10 @@ public:
 		CharBoat		= 10002,
 		CharShip		= 10003,
 		CharAirship		= 10004,
-		CharThisEvent	= 10005
+		CharThisEvent	= 10005,
+		CharFollower1	= 10006,
+		CharFollower2	= 10007,
+		CharFollower3	= 10008
 	};
 
 	enum Direction {

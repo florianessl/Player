@@ -507,6 +507,17 @@ int Game_Party::GetActorPositionInParty(int actor_id) {
 	return it != data.party.end() ? std::distance(data.party.begin(), it) : -1;
 }
 
+int Game_Party::GetPartySize() const {
+	return data.party.size();
+}
+
+Game_Actor* Game_Party::GetActorAtPosition(int party_index) const {
+	if (party_index < GetPartySize()) {
+		return Main_Data::game_actors->GetActor(data.party[party_index]);
+	}
+	return nullptr;
+}
+
 std::vector<Game_Actor*> Game_Party::GetActors() const {
 	std::vector<Game_Actor*> actors;
 	std::vector<int16_t>::const_iterator it;

@@ -18,6 +18,7 @@
 // Headers
 #include "audio.h"
 #include "game_character.h"
+#include "game_followers.h"
 #include "game_map.h"
 #include "game_player.h"
 #include "game_switches.h"
@@ -879,6 +880,12 @@ Game_Character* Game_Character::GetCharacter(int character_id, int event_id) {
 		case CharThisEvent:
 			// This event
 			return Game_Map::GetEvent(event_id);
+		case CharFollower1:
+			return Game_Followers::GetFollower(1);
+		case CharFollower2:
+			return Game_Followers::GetFollower(2);
+		case CharFollower3:
+			return Game_Followers::GetFollower(3);
 		default:
 			// Other events
 			return Game_Map::GetEvent(character_id);

@@ -24,6 +24,7 @@
 #include "sprite_airshipshadow.h"
 #include "sprite_character.h"
 #include "game_character.h"
+#include "game_followers.h"
 #include "game_player.h"
 #include "game_vehicle.h"
 #include "game_screen.h"
@@ -80,6 +81,9 @@ void Spriteset_Map::Refresh() {
 	for (bool& v: vehicle_loaded) {
 		v = false;
 	}
+	for (bool& v: followers_loaded) {
+		v = false;
+	}
 }
 
 // Update
@@ -107,6 +111,18 @@ void Spriteset_Map::Update() {
 		if (!vehicle_loaded[i - 1] && vehicle->GetMapId() == map_id) {
 			vehicle_loaded[i - 1] = true;
 			CreateSprite(vehicle, need_x_clone, need_y_clone);
+		}
+	}
+
+	if (Player::HasEasyRpgExtensions() && Game_Followers::IsFollowingEnabled()) {
+		Game_Follower* follower;
+		for (int i = 1; i <= 3; ++i) {
+			follower = Game_Followers::GetFollower(i);
+
+			if (!followers_loaded[i - 1] && follower->GetMapId() == map_id) {
+				followers_loaded[i - 1] = true;
+				CreateSprite(follower, need_x_clone, need_y_clone);
+			}
 		}
 	}
 

@@ -184,6 +184,7 @@ void Game_Player::MoveRouteSetSpriteGraphic(std::string sprite_name, int index) 
 	} else {
 		Game_Character::MoveRouteSetSpriteGraphic(std::move(sprite_name), index);
 	}
+	//TODO: special handling for followers
 }
 
 void Game_Player::UpdateScroll(int amount, bool was_jumping) {

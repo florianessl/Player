@@ -29,6 +29,7 @@
 #include "system.h"
 #include "game_commonevent.h"
 #include "game_event.h"
+#include "game_followers.h"
 #include "game_vehicle.h"
 #include "game_player.h"
 #include <lcf/rpg/fwd.h>
@@ -38,6 +39,7 @@
 #include <lcf/rpg/savemapinfo.h>
 #include <lcf/rpg/savepanorama.h>
 #include <lcf/rpg/savepartylocation.h>
+#include <lcf/rpg/saveeasyrpgdata.h>
 #include <lcf/rpg/savevehiclelocation.h>
 #include <lcf/rpg/savecommonevent.h>
 
@@ -161,7 +163,8 @@ namespace Game_Map {
 			lcf::rpg::SaveVehicleLocation save_airship,
 			lcf::rpg::SaveEventExecState save_fg_exec,
 			lcf::rpg::SavePanorama save_pan,
-			std::vector<lcf::rpg::SaveCommonEvent> save_ce);
+			std::vector<lcf::rpg::SaveCommonEvent> save_ce,
+			lcf::rpg::SaveEasyRpgData save_easyrpg);
 
 	/**
 	 * Copies event data into lcf::rpg::Save data.
@@ -833,6 +836,11 @@ namespace Game_Map {
 		/** @return Whether oy adjustment is required for fake resolution mode */
 		bool FakeYPosition();
 	}
+
+	template <typename F>
+	void ProcessNonMapCharacters(const bool current_map, F&& op);
+
+	void UpdateNonMapCharacters(const bool current_map);
 }
 
 inline AsyncOp MapUpdateAsyncContext::GetAsyncOp() const {
