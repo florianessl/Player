@@ -425,8 +425,10 @@ void Window_Settings::RefreshEngine() {
 
 	AddOption(cfg.show_startup_logos, [this, &cfg](){ cfg.show_startup_logos.Set(static_cast<ConfigEnum::StartupLogos>(GetCurrentOption().current_value)); });
 	AddOption(cfg.settings_autosave, [&cfg](){ cfg.settings_autosave.Toggle(); });
-	AddOption(cfg.settings_in_title, [&cfg](){ cfg.settings_in_title.Toggle(); });
-	AddOption(cfg.settings_in_menu, [&cfg](){ cfg.settings_in_menu.Toggle(); });
+	AddOption(cfg.settings_in_title, [&cfg]() { cfg.settings_in_title.Toggle(); });
+	AddOption(cfg.settings_in_menu, [&cfg]() { cfg.settings_in_menu.Toggle(); });
+	AddOption(cfg.lang_select_on_start, [this, &cfg]() { cfg.lang_select_on_start.Set(static_cast<ConfigEnum::StartupLangSelect>(GetCurrentOption().current_value)); });
+	AddOption(cfg.lang_select_in_title, [&cfg](){ cfg.lang_select_in_title.Toggle(); });
 }
 
 void Window_Settings::RefreshEngineFont(bool mincho) {
