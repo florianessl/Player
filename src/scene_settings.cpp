@@ -269,6 +269,7 @@ void Scene_Settings::vUpdate() {
 		case Window_Settings::eAudio:
 		case Window_Settings::eAudioMidi:
 		case Window_Settings::eAudioSoundfont:
+		case Window_Settings::eLanguage:
 		case Window_Settings::eLicense:
 		case Window_Settings::eEngine:
 		case Window_Settings::eInputButtonCategory:
