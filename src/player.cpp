@@ -1175,11 +1175,13 @@ void Player::LoadSavegame(const std::string& save_name, int save_id) {
 			verstr.str(), Version::STRING);
 	}
 
+#ifdef LIBLCF_HAS_LANG_FIELD
 	std::string savegame_language = ToString(save->easyrpg_data.language);
 	if (!savegame_language.empty() && savegame_language != "default") {
 		Output::Debug("Savegame language: '{}' ", savegame_language);
 		Player::translation.SelectLanguage(savegame_language);
 	}
+#endif
 
 	// Compatibility hacks for old EasyRPG Player saves.
 	if (save->easyrpg_data.version == 0) {

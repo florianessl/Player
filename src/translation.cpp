@@ -161,10 +161,11 @@ const std::vector<Language>& Translation::GetLanguages() const
 std::string Translation::GetLatestSavegameLanguage() {
 	// TODO: Disable for platforms with slow I/O
 
+#ifdef LIBLCF_HAS_LANG_FIELD
+	std::string latest_lang = std::string(lcf::rpg::SaveEasyRpgData::kDefaultLanguage);
 	// Refresh File Finder Save Folder
 	FilesystemView fs = FileFinder::Save();
 	double latest_time = 0;
-	std::string latest_lang = std::string(lcf::rpg::SaveEasyRpgData::kDefaultLanguage);
 
 	for (int i = 0; i < Utils::Clamp<int32_t>(lcf::Data::system.easyrpg_max_savefiles, 3, 99); i++) {
 		std::stringstream ss;
@@ -190,6 +191,9 @@ std::string Translation::GetLatestSavegameLanguage() {
 	}
 
 	return latest_lang;
+#else
+	return "default";
+#endif
 }
 
 
