@@ -158,6 +158,14 @@ const std::vector<Language>& Translation::GetLanguages() const
 	return languages;
 }
 
+bool Translation::IsApplyLanguageFromSavefiles() {
+#ifdef LIBLCF_HAS_LANG_FIELD
+	return lcf::Data::system.easyrpg_apply_lang_from_save;
+#else
+	return false;
+#endif
+}
+
 std::string Translation::GetLatestSavegameLanguage() {
 	// TODO: Disable for platforms with slow I/O
 

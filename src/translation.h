@@ -194,6 +194,11 @@ public:
 	 */
 	void SelectLanguage(StringView lang_id);
 
+	/*
+	  Determines if the game language should be automatically detected and set from save files.
+	*/
+	bool IsApplyLanguageFromSavefiles();
+
 	/**
 	* Looks up the latest savegame from the Save folder and returns the defined language.
 	*
