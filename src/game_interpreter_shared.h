@@ -29,6 +29,37 @@ class Game_BaseInterpreterContext;
 
 namespace Game_Interpreter_Shared {
 
+	enum class EventType {
+		None = 0,
+		MapEvent,
+		CommonEvent,
+		BattleEvent
+	};
+
+	enum class ExecutionType {
+		/*
+		 * MapEvent Triggered by decision key
+		 * (or via custom command EasyRpg_TriggerEventAt)
+		 */
+		Action = 0,
+		Touch,
+		Collision,
+		AutoStart,
+		Parallel,
+		/* Frame was pushed via "CallCommand" */
+		Call,
+		/* Maniac´s special CE type "Battle start" */
+		BattleStart,
+		/* Maniac´s special CE type "Battle Parallel" */
+		BattleParallel,
+
+		/* 2k3 Death Handler */
+		DeathHandler = 10,
+		/* Event code was dynamically evaluated. (ManiacCallCommand) */
+		Eval,
+		DebugCall
+	};
+
 	/*
 	* Indicates how the target of an interpreter operation (lvalue) should be evaluated.
 	*/
@@ -168,5 +199,8 @@ protected:
 		return Game_Interpreter_Shared::ValueOrVariableBitfield<validate_patches, support_indirect_and_switch, support_scopes, support_named>(com, mode_idx, shift, val_idx, *this);
 	}
 };
+
+using InterpreterExecutionType = Game_Interpreter_Shared::ExecutionType;
+using InterpreterEventType = Game_Interpreter_Shared::EventType;
 
 #endif
