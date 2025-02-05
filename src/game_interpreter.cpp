@@ -786,6 +786,8 @@ bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CommandManiacCallCommand(com);
 		case Cmd::Maniac_GetGameInfo:
 			return CommandManiacGetGameInfo(com);
+		case static_cast<Cmd>(2027):	//Cmd::EasyRpg_ChangeLanguage:
+			return CommandEasyRpgChangeLanguage(com);
 		case Cmd::EasyRpg_SetInterpreterFlag:
 			return CommandEasyRpgSetInterpreterFlag(com);
 		case Cmd::EasyRpg_ProcessJson:
@@ -5507,4 +5509,16 @@ int Game_Interpreter::ManiacBitmask(int value, int mask) const {
 	}
 
 	return value;
+}
+
+bool Game_Interpreter::CommandEasyRpgChangeLanguage(lcf::rpg::EventCommand const& com) { //2027
+	if (!Player::HasEasyRpgExtensions() || !Player::translation.HasTranslations()) {
+		return true;
+	}
+
+	std::string lang_id = ToString(CommandStringOrVariable(com, 0, 1));
+	if (lang_id == "default") {
+		lang_id = "";
+	}
+	Player::translation.SelectLanguage(lang_id);
 }
