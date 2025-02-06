@@ -133,6 +133,9 @@ namespace Game_Interpreter_Shared {
 	lcf::rpg::MoveCommand DecodeMove(lcf::DBArray<int32_t>::const_iterator& it);
 
 	bool ManiacCheckContinueLoop(int val, int val2, int type, int op);
+
+	ExecutionType ManiacExecutionType(lcf::rpg::SaveEventExecFrame const& frame);
+	EventType ManiacEventType(lcf::rpg::SaveEventExecFrame const& frame);
 }
 
 inline bool Game_Interpreter_Shared::CheckOperator(int val, int val2, int op) {
@@ -171,6 +174,27 @@ inline bool Game_Interpreter_Shared::ManiacCheckContinueLoop(int val, int val2, 
 	}
 }
 
+using InterpreterExecutionType = Game_Interpreter_Shared::ExecutionType;
+using InterpreterEventType = Game_Interpreter_Shared::EventType;
+
+inline InterpreterExecutionType Game_Interpreter_Shared::ManiacExecutionType(lcf::rpg::SaveEventExecFrame const& frame) {
+	if (int type_ex = (frame.maniac_event_info & 0xF); type_ex <= static_cast<int>(ExecutionType::BattleParallel)) {
+		return static_cast<InterpreterExecutionType>(type_ex);
+	}
+	return InterpreterExecutionType::Action;
+}
+
+inline InterpreterEventType Game_Interpreter_Shared::ManiacEventType(lcf::rpg::SaveEventExecFrame const& frame) {
+	if ((frame.maniac_event_info & 0x10) > 0) {
+		return InterpreterEventType::MapEvent;
+	} else if ((frame.maniac_event_info & 0x20) > 0) {
+		return InterpreterEventType::CommonEvent;
+	} else if ((frame.maniac_event_info & 0x40) > 0) {
+		return InterpreterEventType::BattleEvent;
+	}
+	return InterpreterEventType::None;
+}
+
 class Game_BaseInterpreterContext {
 public:
 	virtual ~Game_BaseInterpreterContext() {}
@@ -199,8 +223,5 @@ protected:
 		return Game_Interpreter_Shared::ValueOrVariableBitfield<validate_patches, support_indirect_and_switch, support_scopes, support_named>(com, mode_idx, shift, val_idx, *this);
 	}
 };
-
-using InterpreterExecutionType = Game_Interpreter_Shared::ExecutionType;
-using InterpreterEventType = Game_Interpreter_Shared::EventType;
 
 #endif
