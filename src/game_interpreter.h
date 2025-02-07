@@ -130,6 +130,13 @@ public:
 	/** @return true if wait command (time or key) is active. Used by 2k3 battle system */
 	bool IsWaitingForWaitCommand() const;
 
+	bool IsEasyRpgMapInitProcessed(bool is_immediate) const;
+	void SetEasyRpgMapInitProcessed(bool is_immediate);
+
+	bool IsFrameTriggeredByEasyRpgMapInit() const;
+
+	static bool IsFrameTriggeredByEasyRpgMapInit(lcf::rpg::SaveEventExecFrame const& frame);
+	static void ResetMapInitState();
 protected:
 	static constexpr int loop_limit = 10000;
 	static constexpr int call_stack_limit = 1000;
@@ -319,6 +326,9 @@ protected:
 	void ForegroundTextPush(PendingMessage pm);
 	void EndEventProcessing();
 
+	virtual bool AssertMessageAllowed();
+	virtual bool AssertTeleportAllowed();
+
 	FileRequestBinding request_id;
 	enum class Keys {
 		eDown,
@@ -395,13 +405,15 @@ inline void Game_Interpreter::Push(std::vector<lcf::rpg::EventCommand> _list, in
 
 template<InterpreterExecutionType type_ex>
 inline void Game_Interpreter::Push(Game_Event* ev) {
-	static_assert(type_ex <= InterpreterExecutionType::Call || type_ex == InterpreterExecutionType::DebugCall, "Unexpected ExecutionType for MapEvent");
+	static_assert(type_ex <= InterpreterExecutionType::Call || type_ex == InterpreterExecutionType::DebugCall
+		|| type_ex == InterpreterExecutionType::EasyRpg_MapInitImmediate || type_ex == InterpreterExecutionType::EasyRpg_MapInitDeferred, "Unexpected ExecutionType for MapEvent");
 	PushInternal(ev, type_ex);
 }
 
 template<InterpreterExecutionType type_ex>
 inline void Game_Interpreter::Push(Game_Event* ev, const lcf::rpg::EventPage* page) {
-	static_assert(type_ex <= InterpreterExecutionType::Call || type_ex == InterpreterExecutionType::DebugCall, "Unexpected ExecutionType for MapEvent");
+	static_assert(type_ex <= InterpreterExecutionType::Call || type_ex == InterpreterExecutionType::DebugCall
+		|| type_ex == InterpreterExecutionType::EasyRpg_MapInitImmediate || type_ex == InterpreterExecutionType::EasyRpg_MapInitDeferred, "Unexpected ExecutionType for MapEvent");
 	PushInternal(ev, page, type_ex);
 }
 
@@ -409,7 +421,8 @@ template<InterpreterExecutionType type_ex>
 inline void Game_Interpreter::Push(Game_CommonEvent* ev) {
 	static_assert(type_ex == InterpreterExecutionType::AutoStart || type_ex == InterpreterExecutionType::Parallel
 		|| type_ex == InterpreterExecutionType::Call || type_ex == InterpreterExecutionType::DeathHandler
-		|| type_ex == InterpreterExecutionType::DebugCall || type_ex == InterpreterExecutionType::ManiacHook, "Unexpected ExecutionType for CommonEvent"
+		|| type_ex == InterpreterExecutionType::DebugCall || type_ex == InterpreterExecutionType::ManiacHook
+		|| type_ex == InterpreterExecutionType::EasyRpg_MapInitImmediate || type_ex == InterpreterExecutionType::EasyRpg_MapInitDeferred, "Unexpected ExecutionType for CommonEvent"
 	);
 	PushInternal(ev, type_ex);
 }
@@ -459,6 +472,30 @@ inline bool Game_Interpreter::IsAsyncPending() {
 
 inline AsyncOp Game_Interpreter::GetAsyncOp() const {
 	return _async_op;
+}
+
+inline bool Game_Interpreter::IsEasyRpgMapInitProcessed(bool is_immediate) const {
+	if (is_immediate) {
+		return (_state.easyrpg_runtime_flags & 0x02) != 0;
+	}
+	return (_state.easyrpg_runtime_flags & 0x04) != 0;
+}
+
+inline void Game_Interpreter::SetEasyRpgMapInitProcessed(bool is_immediate) {
+	if (is_immediate) {
+		_state.easyrpg_runtime_flags |= 0x02;
+		return;
+	}
+	_state.easyrpg_runtime_flags |= 0x04;
+}
+
+inline bool Game_Interpreter::IsFrameTriggeredByEasyRpgMapInit() const {
+	return IsFrameTriggeredByEasyRpgMapInit(GetFrame());
+}
+
+inline bool Game_Interpreter::IsFrameTriggeredByEasyRpgMapInit(lcf::rpg::SaveEventExecFrame const& frame) {
+	return (frame.easyrpg_event_info & static_cast<int>(InterpreterExecutionType::EasyRpg_MapInitImmediate)) != 0
+		|| (frame.easyrpg_event_info & static_cast<int>(InterpreterExecutionType::EasyRpg_MapInitDeferred)) != 0;
 }
 
 #endif

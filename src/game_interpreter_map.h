@@ -86,6 +86,7 @@ private:
 
 	bool CommandEasyRpgTriggerEventAt(lcf::rpg::EventCommand const& com);
 	bool CommandEasyRpgWaitForSingleMovement(lcf::rpg::EventCommand const& com);
+	bool CommandEasyRpgResetMapState(lcf::rpg::EventCommand const& com);
 
 	AsyncOp ContinuationShowInnStart(int indent, int choice_result, int price);
 

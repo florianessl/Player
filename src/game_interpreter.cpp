@@ -136,6 +136,9 @@ void Game_Interpreter::PushInternal(
 		frame.maniac_event_info |= (static_cast<int>(type_src) << 4);
 	}
 
+	frame.easyrpg_event_info = static_cast<int>(type_ex);
+	frame.easyrpg_event_info |= (static_cast<int>(type_src) << 8);
+
 	if (_state.stack.empty() && main_flag && !Game_Battle::IsBattleRunning()) {
 		Main_Data::game_system->ClearMessageFace();
 		Main_Data::game_player->SetMenuCalling(false);
@@ -328,6 +331,9 @@ int Game_Interpreter::GetThisEventId() const {
 	auto event_id = GetCurrentEventId();
 
 	if (event_id == 0 && (Player::IsRPG2k3E() || Player::game_config.patch_common_this_event.Get())) {
+		if (EP_UNLIKELY(IsFrameTriggeredByEasyRpgMapInit(GetFrame()))) {
+			return 0;
+		}
 		// RM2k3E allows "ThisEvent" commands to run from called
 		// common events. It operates on the last map event in
 		// the call stack.
@@ -896,6 +902,9 @@ bool Game_Interpreter::CommandShowMessage(lcf::rpg::EventCommand const& com) { /
 	if (!Game_Message::CanShowMessage(main_flag)) {
 		return false;
 	}
+	if (!AssertMessageAllowed()) {
+		return true;
+	}
 
 	PendingMessage pm(Game_Message::CommandCodeInserter);
 	pm.SetIsEventMessage(true);
@@ -993,6 +1002,9 @@ bool Game_Interpreter::CommandShowChoices(lcf::rpg::EventCommand const& com) { /
 	if (!Game_Message::CanShowMessage(main_flag)) {
 		return false;
 	}
+	if (!AssertMessageAllowed()) {
+		return true;
+	}
 
 	PendingMessage pm(Game_Message::CommandCodeInserter);
 	pm.SetIsEventMessage(true);
@@ -1024,6 +1036,9 @@ bool Game_Interpreter::CommandShowChoiceEnd(lcf::rpg::EventCommand const& /* com
 bool Game_Interpreter::CommandInputNumber(lcf::rpg::EventCommand const& com) { // code 10150
 	if (!Game_Message::CanShowMessage(main_flag)) {
 		return false;
+	}
+	if (!AssertMessageAllowed()) {
+		return true;
 	}
 
 	PendingMessage pm(Game_Message::CommandCodeInserter);
@@ -1663,6 +1678,10 @@ bool Game_Interpreter::CommandChangeExp(lcf::rpg::EventCommand const& com) { // 
 	if (show_msg && !Game_Message::CanShowMessage(true)) {
 		return false;
 	}
+	if (show_msg && !AssertMessageAllowed()) {
+		return true;
+	}
+
 	int value = OperateValue(
 		com.parameters[2],
 		com.parameters[3],
@@ -1692,6 +1711,9 @@ bool Game_Interpreter::CommandChangeLevel(lcf::rpg::EventCommand const& com) { /
 
 	if (show_msg && !Game_Message::CanShowMessage(true)) {
 		return false;
+	}
+	if (show_msg && !AssertMessageAllowed()) {
+		return true;
 	}
 
 	int value = OperateValue(
@@ -1980,6 +2002,9 @@ bool Game_Interpreter::CommandWait(lcf::rpg::EventCommand const& com) { // code 
 
 	if (Game_Message::IsMessageActive()) {
 		return false;
+	}
+	if (!AssertMessageAllowed()) {
+		return true;
 	}
 
 	// Wait until decision key pressed, but skip the first frame so that
@@ -2279,6 +2304,9 @@ bool Game_Interpreter::CommandSetVehicleLocation(lcf::rpg::EventCommand const& c
 		auto event_id = GetOriginalEventId();
 		if (!main_flag && event_id != 0) {
 			Output::Error("VehicleTeleport not allowed from parallel map event! Id={}", event_id);
+		}
+		if (!AssertTeleportAllowed()) {
+			return true;
 		}
 
 		_async_op = AsyncOp::MakeQuickTeleport(map_id, x, y);
@@ -3996,6 +4024,9 @@ bool Game_Interpreter::CommandChangeClass(lcf::rpg::EventCommand const& com) { /
 	if (show_msg && !Game_Message::CanShowMessage(true)) {
 		return false;
 	}
+	if (show_msg && !AssertMessageAllowed()) {
+		return true;
+	}
 
 	PendingMessage pm(Game_Message::CommandCodeInserter);
 	pm.SetEnableFace(false);
@@ -5550,6 +5581,12 @@ int Game_Interpreter::ManiacBitmask(int value, int mask) const {
 	return value;
 }
 
+void Game_Interpreter::ResetMapInitState() {
+	auto& interpreter = GetForegroundInterpreter();
+	interpreter._state.easyrpg_runtime_flags &= ~0x02;
+	interpreter._state.easyrpg_runtime_flags &= ~0x04;
+}
+
 namespace {
 	lcf::rpg::SaveEventExecState const& empty_state = {};
 }
@@ -5608,4 +5645,26 @@ bool Game_Interpreter_Inspector::IsInActiveExcecution(Game_CommonEvent const& ce
 		return false;
 	}
 	return ce.interpreter && ce.interpreter->IsRunning();
+}
+
+namespace {
+	inline bool AssertNotInsideImmediateMapInitContext(lcf::rpg::SaveEventExecFrame& frame) {
+
+		if (Game_Interpreter::IsFrameTriggeredByEasyRpgMapInit(frame)) {
+			const auto& com = frame.commands[frame.current_command];
+			if (com.code != 11410) {
+				Output::Debug("Command Execution not allowed in MapInit context 'Immediate': {}", lcf::rpg::EventCommand::kCodeTags.tag(com.code));
+			}
+			return false;
+		}
+		return true;
+	}
+}
+
+bool Game_Interpreter::AssertMessageAllowed() {
+	return AssertNotInsideImmediateMapInitContext(GetFrame());
+}
+
+bool Game_Interpreter::AssertTeleportAllowed() {
+	return AssertNotInsideImmediateMapInitContext(GetFrame());
 }

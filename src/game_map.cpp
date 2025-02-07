@@ -1352,8 +1352,40 @@ bool Game_Map::UpdateMessage(MapUpdateAsyncContext& actx) {
 	return true;
 }
 
+void Game_Map::ResetMap() {
+	Setup(std::move(map));
+}
+
+template<bool is_immediate>
+void Game_Map::TriggerMapInitEvents() {
+	constexpr auto type_ex = is_immediate ? InterpreterExecutionType::EasyRpg_MapInitImmediate : InterpreterExecutionType::EasyRpg_MapInitDeferred;
+	auto& interp = GetInterpreter();
+
+	if (interp.IsEasyRpgMapInitProcessed(is_immediate)) {
+		return;
+	}
+
+	for (auto rit = events.rbegin(); rit != events.rend(); ++rit) {
+		auto& ev = *rit;
+		if (ev.IsWaitingMapInitExecution(is_immediate)) {
+			interp.Push<type_ex>(&ev);
+		}
+	}
+
+	for (auto rit = common_events.rbegin();	rit != common_events.rend(); ++rit) {
+		auto& ce = *rit;
+		if (ce.IsWaitingMapInitExecution(is_immediate)) {
+			interp.Push<type_ex>(&ce);
+		}
+	}
+}
+
 bool Game_Map::UpdateForegroundEvents(MapUpdateAsyncContext& actx) {
 	auto& interp = GetInterpreter();
+
+	if (Player::HasEasyRpgExtensions()) {
+		TriggerMapInitEvents<true>();
+	}
 
 	// If we resume from async op, we don't clear the loop index.
 	const bool resume_fg = actx.IsForegroundEvent();
@@ -1375,6 +1407,17 @@ bool Game_Map::UpdateForegroundEvents(MapUpdateAsyncContext& actx) {
 		if (Scene::instance->HasRequestedScene() && interp.GetLoopCount() > 0) {
 			break;
 		}
+		TriggerMapInitEvents<false>();
+
+		if (interp.IsRunning()) {
+			interp.Update(false);
+			if (interp.IsAsyncPending()) {
+				// Suspend due to this event ..
+				actx = MapUpdateAsyncContext::FromForegroundEvent(interp.GetAsyncOp());
+				return false;
+			}
+		}
+
 		Game_CommonEvent* run_ce = nullptr;
 
 		for (auto& ce: common_events) {

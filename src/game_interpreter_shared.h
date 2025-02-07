@@ -64,7 +64,9 @@ namespace Game_Interpreter_Shared {
 		/* Event code was dynamically evaluated. (ManiacCallCommand) */
 		Eval,
 		DebugCall,
-		ManiacHook
+		ManiacHook,
+		EasyRpg_MapInitImmediate,
+		EasyRpg_MapInitDeferred
 	};
 	static constexpr auto kExecutionType = lcf::makeEnumTags<ExecutionType>(
 		"Action",
@@ -79,7 +81,10 @@ namespace Game_Interpreter_Shared {
 		"---",
 		"DeathHandler",
 		"Eval",
-		"DebugCall"
+		"DebugCall",
+		"ManiacHook",
+		"MapInitImmediate",
+		"MapInitDeferred"
 	);
 
 	/*
