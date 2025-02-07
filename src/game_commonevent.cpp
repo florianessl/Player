@@ -117,3 +117,10 @@ bool Game_CommonEvent::IsWaitingBackgroundExecution(bool force_run) const {
 	return ce->trigger == lcf::rpg::EventPage::Trigger_parallel &&
 		(force_run || !ce->switch_flag || Main_Data::game_switches->Get(ce->switch_id));
 }
+
+bool Game_CommonEvent::IsWaitingMapInitExecution(bool immediate) const {
+	auto* ce = lcf::ReaderUtil::GetElement(lcf::Data::commonevents, common_event_id);
+	return ce->trigger == (immediate ? lcf::rpg::CommonEvent::Trigger_map_init_immediate : lcf::rpg::CommonEvent::Trigger_map_init_deferred)
+		&& (!ce->switch_flag || Main_Data::game_switches->Get(ce->switch_id))
+		&& !ce->event_commands.empty();
+}

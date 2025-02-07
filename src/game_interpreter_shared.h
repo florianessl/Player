@@ -68,6 +68,8 @@ namespace Game_Interpreter_Shared {
 		Eval,
 		DebugCall,
 		ManiacHook,
+		EasyRpg_MapInitImmediate,
+		EasyRpg_MapInitDeferred,
 		LAST
 	};
 	static constexpr auto kExecutionType = lcf::makeEnumTags<ExecutionType>(
@@ -84,7 +86,9 @@ namespace Game_Interpreter_Shared {
 		"DeathHandler",
 		"Eval",
 		"DebugCall",
-		"ManiacHook"
+		"ManiacHook",
+		"MapInitImmediate",
+		"MapInitDeferred"
 	);
 	static_assert(kExecutionType.size() == static_cast<size_t>(ExecutionType::LAST));
 

@@ -115,6 +115,8 @@ public:
 	 */
 	bool IsWaitingBackgroundExecution(bool force_run) const;
 
+	bool IsWaitingMapInitExecution(bool immediate) const;
+
 private:
 	int common_event_id;
 

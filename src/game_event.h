@@ -86,6 +86,8 @@ public:
 	/** @return waiting_execution flag.  */
 	bool IsWaitingForegroundExecution() const;
 
+	bool IsWaitingMapInitExecution(bool immediate) const;
+
 	/**
 	 * If the event is starting, whether or not it was started
 	 * by pushing the decision key.

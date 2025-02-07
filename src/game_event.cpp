@@ -305,6 +305,15 @@ bool Game_Event::IsWaitingForegroundExecution() const {
 	return data()->waiting_execution;
 }
 
+bool Game_Event::IsWaitingMapInitExecution(bool immediate) const {
+	if (!page || page->event_commands.empty())
+		return false;
+
+	if (immediate)
+		return GetTrigger() == lcf::rpg::EventPage::Trigger_map_init_immediate;
+	return GetTrigger() == lcf::rpg::EventPage::Trigger_map_init_deferred;
+}
+
 bool Game_Event::WasStartedByDecisionKey() const {
 	return data()->triggered_by_decision_key;
 }

@@ -753,6 +753,11 @@ namespace Game_Map {
 	void SetNeedRefreshForSwitchChange(std::initializer_list<int> switch_ids);
 	void SetNeedRefreshForVarChange(std::initializer_list<int> var_ids);
 
+	void ResetMap();
+
+	template<bool is_immediate>
+	void TriggerMapInitEvents();
+
 	namespace Parallax {
 		struct Params {
 			std::string name;
