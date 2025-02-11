@@ -33,7 +33,8 @@ namespace Game_Interpreter_Shared {
 		None = 0,
 		MapEvent,
 		CommonEvent,
-		BattleEvent
+		BattleEvent,
+		LAST
 	};
 	static constexpr auto kEventType = lcf::makeEnumTags<EventType>(
 		"None",
@@ -41,6 +42,7 @@ namespace Game_Interpreter_Shared {
 		"CommonEvent",
 		"BattleEvent"
 	);
+	static_assert(kEventType.size() == static_cast<size_t>(EventType::LAST));
 
 	enum class ExecutionType {
 		/*
@@ -64,7 +66,8 @@ namespace Game_Interpreter_Shared {
 		/* Event code was dynamically evaluated. (ManiacCallCommand) */
 		Eval,
 		DebugCall,
-		ManiacHook
+		ManiacHook,
+		LAST
 	};
 	static constexpr auto kExecutionType = lcf::makeEnumTags<ExecutionType>(
 		"Action",
@@ -79,8 +82,10 @@ namespace Game_Interpreter_Shared {
 		"---",
 		"DeathHandler",
 		"Eval",
-		"DebugCall"
+		"DebugCall",
+		"ManiacHook"
 	);
+	static_assert(kExecutionType.size() == static_cast<size_t>(ExecutionType::LAST));
 
 	/*
 	* Indicates how the target of an interpreter operation (lvalue) should be evaluated.
