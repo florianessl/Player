@@ -762,7 +762,8 @@ void Player::CreateGameObjects() {
 	}
 
 	int& engine = game_config.engine;
-	std::map<Player::GameConstantType, int32_t> game_constant_overrides;
+	std::map<GameConstantType, int32_t> game_constant_overrides;
+	std::map<EXEReader::KnownPatches, int32_t> patches;
 
 #ifndef EMSCRIPTEN
 	// Attempt reading ExFont and version information from RPG_RT.exe (not supported on Emscripten)
@@ -790,6 +791,10 @@ void Player::CreateGameObjects() {
 		}
 
 		game_constant_overrides = exe_reader->GetOverridenGameConstants();
+
+		if (!game_config.patch_override) {
+			patches = exe_reader->CheckForPatches();
+		}
 
 		if (engine == EngineNone) {
 			Output::Debug("Unable to detect version from exe");
@@ -843,6 +848,26 @@ void Player::CreateGameObjects() {
 
 		if (!FileFinder::Game().FindFile(DESTINY_DLL).empty()) {
 			game_config.patch_destiny.Set(true);
+		}
+
+		if (patches.size() > 0) {
+			for (auto it = patches.begin(); it != patches.end(); ++it) {
+				auto& patch = it->first;
+				auto& patch_var = it->second;
+
+				switch (patch) {
+					case EXEReader::KnownPatches::UnlockPics:
+						if (!game_config.patch_unlock_pics.Get()) {
+							game_config.patch_unlock_pics.Set(true);
+						}
+						break;
+					case EXEReader::KnownPatches::DirectMenu:
+						if (!game_config.patch_direct_menu.Get()) {
+							game_config.patch_direct_menu.Set(patch_var);
+						}
+						break;
+				}
+			}
 		}
 	}
 

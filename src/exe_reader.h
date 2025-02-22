@@ -55,6 +55,20 @@ public:
 		"amd64"
 	);
 
+	enum class KnownPatches {
+		UnlockPics,
+		DirectMenu,
+
+		LAST
+	};
+
+	static constexpr auto kKnownPatches = lcf::makeEnumTags<KnownPatches>(
+		"UnlockPics",
+		"DirectMenu"
+	);
+
+	static_assert(kKnownPatches.size() == static_cast<size_t>(KnownPatches::LAST));
+
 	struct FileInfo {
 		uint64_t version = 0;
 		int logos = 0;
@@ -75,6 +89,8 @@ public:
 
 	std::map<Player::GameConstantType, int32_t> GetOverridenGameConstants();
 
+	std::map<KnownPatches, int32_t> CheckForPatches();
+
 private:
 	// Bounds-checked unaligned reader primitives.
 	// In case of out-of-bounds, returns 0 - this will usually result in a harmless error at some other level,
@@ -87,6 +103,7 @@ private:
 	uint32_t GetLogoCount();
 	bool ResNameCheck(uint32_t namepoint, const char* name);
 
+	bool CheckForPatchSegment(uint32_t offset, std::initializer_list<uint8_t> bytes);
 	bool CheckForString(uint32_t offset, const char* p);
 
 	// 0 if resource section was unfindable.

@@ -650,6 +650,81 @@ std::map<Player::GameConstantType, int32_t> EXEReader::GetOverridenGameConstants
 	return game_constants;
 }
 
+std::map<EXEReader::KnownPatches, int32_t> EXEReader::CheckForPatches() {
+	std::map<KnownPatches, int32_t> patches;
+
+	int code_offset = file_info.code_ofs - 0x400;
+
+	auto apply_patch = [&](const KnownPatches patch) {
+		Output::Debug("Detected Patch: '{}'", kKnownPatches.tag(static_cast<int>(patch)));
+		patches[patch] = 1;
+	};
+
+	auto apply_patch_with_var = [&](const KnownPatches patch, int offset_var) {
+		int patch_var = GetU32(code_offset + offset_var);
+		if (patch_var > 0) {
+			Output::Debug("Detected Patch: '{}' (VarId: {})", kKnownPatches.tag(static_cast<int>(patch)), patch_var);
+		}
+		patches[patch] = patch_var;
+	};
+
+	switch (file_info.code_size) {
+		case 0x96600:
+			if (file_info.entrypoint == 0x0972C4) {
+
+			} else {
+				// Might also be build '2000-05-07'
+			}
+			break;
+		case 0x96E00:
+			break;
+		case 0x96A00:
+			if (file_info.entrypoint == 0x097744) {
+
+			} else {
+				// Might also be build '2001-05-05'
+			}
+			break;
+		case 0x9BC00:
+			break;
+		case 0x9BE00:
+			break;
+		case 0x9C000:
+			break;
+		case 0x9CA00:
+			break;
+		case 0x9CC00:
+			break;
+		case 0xC0800:
+			break;
+		case 0xC8A00:
+			break;
+		case 0xC8E00:
+			if (CheckForPatchSegment(0x0B12FA, { 0x90, 0x90, 0x90, 0x90, 0x90 })) {
+				apply_patch(KnownPatches::UnlockPics);
+			}
+			if (CheckForPatchSegment(0x0A0422, { 0xE9, 0xE2, 0x5E, 0xFA, 0xFF })) {
+				apply_patch_with_var(KnownPatches::DirectMenu, 0x0462DE);
+			}
+			break;
+		case 0xC9000:
+			break;
+		default:
+			Output::Debug("Unknown code size: {}", file_info.code_size);
+			break;
+	}
+
+	return patches;
+}
+
+bool EXEReader::CheckForPatchSegment(uint32_t offset, std::initializer_list<uint8_t> bytes) {
+	auto p = bytes.begin();
+	while (p != bytes.end()) {
+		if (GetU8(file_info.code_ofs - 0x400 + offset++) != *p++)
+			return false;
+	}
+	return true;
+}
 
 bool EXEReader::CheckForString(uint32_t offset, const char* p) {
 	while (*p) {
