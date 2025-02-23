@@ -499,8 +499,8 @@ std::map<Player::GameConstantType, int32_t> EXEReader::GetOverridenGameConstants
 	int code_offset = file_info.code_ofs - 0x400;
 
 	auto match_surrounding_data = [&](const ExeConstants::CodeAddressInfo& info, const uint32_t const_ofs) {
-		for (int i = 0; i < info.size_pre_data; i++) {
-			if (info.pre_data[i] != GetU8(const_ofs - info.size_pre_data + i))
+		for (int i = 0; i < info.pre_data.size(); i++) {
+			if (info.pre_data[i] != GetU8(const_ofs - info.pre_data.size() + i))
 				return false;
 		}
 		/*for (int i = 0; i < info.post_data.size(); i++) {
@@ -527,9 +527,10 @@ std::map<Player::GameConstantType, int32_t> EXEReader::GetOverridenGameConstants
 			const_ofs = code_offset + addr_info.code_offset;
 
 			bool extract_constant = false;
-			if (addr_info.pre_data == ExeConstants::magic_prev && extract_success) {
+			/*if (addr_info.pre_data == ExeConstants::magic_prev && extract_success) {
 				extract_constant = true;
-			} else if (match_surrounding_data(addr_info, const_ofs)) {
+			} else*/
+			if (match_surrounding_data(addr_info, const_ofs)) {
 				extract_constant = true;
 			}
 
@@ -567,14 +568,6 @@ std::map<Player::GameConstantType, int32_t> EXEReader::GetOverridenGameConstants
 		}
 	};
 
-	auto log_version_rm2k = [](const StringView& str) {
-		Output::Debug("Assuming RPG2000 build '{}' for constant extraction", str);
-	};
-
-	auto log_version_rm2k3 = [](const StringView& str) {
-		Output::Debug("Assuming RPG2003 build '{}' for constant extraction", str);
-	};
-
 	auto apply_known_config = [&](ExeConstants::KnownPatchConfigurations conf) {
 		Output::Debug("Assuming known patch config '{}'", ExeConstants::kKnownPatchConfigurations.tag(static_cast<int>(conf)));
 		auto it_conf = ExeConstants::known_patch_configurations.find(conf);
@@ -585,145 +578,125 @@ std::map<Player::GameConstantType, int32_t> EXEReader::GetOverridenGameConstants
 		}
 	};
 
-	switch (file_info.code_size) {
-		case 0x96600:
-			if (file_info.entrypoint == 0x0972C4) {
-				log_version_rm2k("DonM 1.03b");
-				check_address_map(ExeConstants::RT_2K::const_addresses_103b);
-			} else {
-				// Might also be build '2000-05-07'
-			}
-			break;
-		case 0x96E00:
-			log_version_rm2k("2000-07-11");
-			check_address_map(ExeConstants::RT_2K::const_addresses_105b);
+	for (auto it = ExeConstants::known_engine_builds.begin(); it != ExeConstants::known_engine_builds.end(); ++it) {
+		auto& curr_build_info = std::get<ExeConstants::EngineBuildInfo>(*it);
+
+		if (file_info.code_size != curr_build_info.code_size || file_info.entrypoint != curr_build_info.entrypoint) {
+			continue;
+		}
+		build_version = std::get<ExeConstants::KnownEngineBuildVersions>(*it);
+		build_info = curr_build_info;
 		break;
-		case 0x96A00:
-			if (file_info.entrypoint == 0x097744) {
-				log_version_rm2k("2000-12-27");
-				check_address_map(ExeConstants::RT_2K::const_addresses_106);
-			} else {
-				// Might also be build '2001-05-05'
-			}
-			break;
-		case 0x9CC00:
-			log_version_rm2k("1.62");
-
-			if (CheckForString(0x07DEA6, "XXX" /* 3x "POP EAX" */)) {
-				apply_known_config(ExeConstants::KnownPatchConfigurations::QP_StatDelimiter);
-			}
-			//check_address_map(ExeConstants::RT_2K::const_addresses_162);
-			break;
-		case 0xC0800:
-			log_version_rm2k3("1.0.3.0_1.0.4.0");
-			check_address_map(ExeConstants::RT_2K3::const_addresses_104);
-			break;
-		case 0xC8A00:
-			log_version_rm2k3("1.0.6.0");
-			check_address_map(ExeConstants::RT_2K3::const_addresses_106);
-			break;
-		case 0xC8E00:
-			log_version_rm2k3("1.0.8.0");
-
-			if (CheckForString(0x08EFE0, "NoTitolo")) {
-				apply_known_config(ExeConstants::KnownPatchConfigurations::Rm2k3_Italian_WD_108);
-			}
-			if (CheckForString(0x09D679, "XXX" /* 3x "POP EAX" */)) {
-				apply_known_config(ExeConstants::KnownPatchConfigurations::QP_StatDelimiter);
-			}
-
-			check_address_map(ExeConstants::RT_2K3::const_addresses_108);
-			break;
-		case 0xC9000:
-			log_version_rm2k3("1.0.9.1");
-
-			if (CheckForString(0x09C9AD, "XXX" /* 3x "POP EAX" */)) {
-				apply_known_config(ExeConstants::KnownPatchConfigurations::QP_StatDelimiter);
-			}
-			//check_address_map(ExeConstants::RT_2K3::const_addresses_1091);
-			break;
-		default:
-			Output::Debug("Unknown code size: {}", file_info.code_size);
-			break;
 	}
 
+	if (build_version != ExeConstants::KnownEngineBuildVersions::UnknownBuild) {
+		Output::Debug("Assuming {} build '{}' for constant extraction",
+			ExeConstants::kEngineTypes.tag(build_info.engine_type),
+			ExeConstants::kKnownEngineBuildDescriptions.tag(build_version));
+
+		ExeConstants::code_address_map const* constant_addresses = nullptr;
+
+		switch (build_info.engine_type) {
+			case ExeConstants::EngineType::RPG2000:
+			{
+				auto& builds = ExeConstants::known_engine_builds_rm2k;
+				auto it = std::find_if(builds.begin(), builds.end(), [&](const auto& pair) {
+					return pair.first == build_version;
+				});
+				if (it != builds.end()) {
+					constant_addresses = &it->second;
+				}
+			}
+			break;
+			case ExeConstants::EngineType::RPG2003:
+			{
+				auto& builds = ExeConstants::known_engine_builds_rm2k3;
+				auto it = std::find_if(builds.begin(), builds.end(), [&](const auto& pair) {
+					return pair.first == build_version;
+				});
+				if (it != builds.end()) {
+					constant_addresses = &it->second;
+				}
+			}
+			break;
+		}
+
+		switch (build_version) {
+			case BuildInfo::RM2KE_162:
+				if (CheckForString(0x07DEA6, "XXX" /* 3x "POP EAX" */)) {
+					apply_known_config(ExeConstants::KnownPatchConfigurations::QP_StatDelimiter);
+				}
+				break;
+			case BuildInfo::RM2K3_1080_1080:
+				if (CheckForString(0x08EFE0, "NoTitolo")) {
+					apply_known_config(ExeConstants::KnownPatchConfigurations::Rm2k3_Italian_WD_108);
+				}
+				if (CheckForString(0x09D679, "XXX" /* 3x "POP EAX" */)) {
+					apply_known_config(ExeConstants::KnownPatchConfigurations::QP_StatDelimiter);
+				}
+				break;
+			case BuildInfo::RM2K3_1091_1091:
+				if (CheckForString(0x09C9AD, "XXX" /* 3x "POP EAX" */)) {
+					apply_known_config(ExeConstants::KnownPatchConfigurations::QP_StatDelimiter);
+				}
+				break;
+			default:
+				break;
+		}
+
+		if (constant_addresses) {
+			check_address_map(*constant_addresses);
+		}
+	}
 	return game_constants;
 }
 
-std::map<EXEReader::KnownPatches, int32_t> EXEReader::CheckForPatches() {
-	std::map<KnownPatches, int32_t> patches;
+std::map<int, int32_t> EXEReader::CheckForPatches() {
+	std::map<int, int32_t> patches;
 
 	int code_offset = file_info.code_ofs - 0x400;
 
-	auto apply_patch = [&](const KnownPatches patch) {
-		Output::Debug("Detected Patch: '{}'", kKnownPatches.tag(static_cast<int>(patch)));
-		patches[patch] = 1;
-	};
-
-	auto apply_patch_with_var = [&](const KnownPatches patch, int offset_var) {
-		int patch_var = GetU32(code_offset + offset_var);
-		if (patch_var > 0) {
-			Output::Debug("Detected Patch: '{}' (VarId: {})", kKnownPatches.tag(static_cast<int>(patch)), patch_var);
+	auto check_for_patch_segment = [&](const ExeConstants::PatchDetectionInfo& patch_info) {
+		for (int i = 0; i < patch_info.chk_segment_data.size(); i++) {
+			if (patch_info.chk_segment_data[i] != GetU8(code_offset + patch_info.chk_segment_offset + i))
+				return false;
 		}
-		patches[patch] = patch_var;
 	};
 
-	switch (file_info.code_size) {
-		case 0x96600:
-			if (file_info.entrypoint == 0x0972C4) {
+	auto apply_patches = [&](const auto& patch_detection_map) {
+		for (auto it = patch_detection_map.begin(); it < patch_detection_map.end(); ++it) {
+			auto patch_type = it->first;
+			auto& patch_info = it->second;
 
-			} else {
-				// Might also be build '2000-05-07'
+			if (!check_for_patch_segment(patch_info)) {
+				continue;
 			}
-			break;
-		case 0x96E00:
-			break;
-		case 0x96A00:
-			if (file_info.entrypoint == 0x097744) {
 
+			if (patch_info.extract_var_offset == 0) {
+				Output::Debug("Detected Patch: '{}'", ExeConstants::kKnownPatches.tag(static_cast<int>(patch_type)));
+				patches[static_cast<int>(patch_type)] = 1;
 			} else {
-				// Might also be build '2001-05-05'
+				int patch_var = GetU32(code_offset + patch_info.extract_var_offset);
+				if (patch_var > 0) {
+					Output::Debug("Detected Patch: '{}' (VarId: {})", ExeConstants::kKnownPatches.tag(static_cast<int>(patch_type)), patch_var);
+				}
+				patches[static_cast<int>(patch_type)] = patch_var;
 			}
+		}
+	};
+
+	switch (build_version) {
+		case ExeConstants::RM2K3_1080_1080:
+			apply_patches(ExeConstants::patches_RM2K3_1080);
 			break;
-		case 0x9BC00:
-			break;
-		case 0x9BE00:
-			break;
-		case 0x9C000:
-			break;
-		case 0x9CA00:
-			break;
-		case 0x9CC00:
-			break;
-		case 0xC0800:
-			break;
-		case 0xC8A00:
-			break;
-		case 0xC8E00:
-			if (CheckForPatchSegment(0x0B12FA, { 0x90, 0x90, 0x90, 0x90, 0x90 })) {
-				apply_patch(KnownPatches::UnlockPics);
-			}
-			if (CheckForPatchSegment(0x0A0422, { 0xE9, 0xE2, 0x5E, 0xFA, 0xFF })) {
-				apply_patch_with_var(KnownPatches::DirectMenu, 0x0462DE);
-			}
-			break;
-		case 0xC9000:
+		case ExeConstants::RM2K3_1091_1091:
+			apply_patches(ExeConstants::patches_RM2K3_1091);
 			break;
 		default:
-			Output::Debug("Unknown code size: {}", file_info.code_size);
 			break;
 	}
 
 	return patches;
-}
-
-bool EXEReader::CheckForPatchSegment(uint32_t offset, std::initializer_list<uint8_t> bytes) {
-	auto p = bytes.begin();
-	while (p != bytes.end()) {
-		if (GetU8(file_info.code_ofs - 0x400 + offset++) != *p++)
-			return false;
-	}
-	return true;
 }
 
 bool EXEReader::CheckForString(uint32_t offset, const char* p) {

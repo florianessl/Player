@@ -23,6 +23,7 @@
 #include <istream>
 #include <vector>
 #include "bitmap.h"
+#include "exe_buildinfo.h"
 #include "player.h"
 
 /**
@@ -55,20 +56,6 @@ public:
 		"amd64"
 	);
 
-	enum class KnownPatches {
-		UnlockPics,
-		DirectMenu,
-
-		LAST
-	};
-
-	static constexpr auto kKnownPatches = lcf::makeEnumTags<KnownPatches>(
-		"UnlockPics",
-		"DirectMenu"
-	);
-
-	static_assert(kKnownPatches.size() == static_cast<size_t>(KnownPatches::LAST));
-
 	struct FileInfo {
 		uint64_t version = 0;
 		int logos = 0;
@@ -89,7 +76,7 @@ public:
 
 	std::map<Player::GameConstantType, int32_t> GetOverridenGameConstants();
 
-	std::map<KnownPatches, int32_t> CheckForPatches();
+	std::map<int, int32_t> CheckForPatches();
 
 private:
 	// Bounds-checked unaligned reader primitives.
@@ -103,7 +90,6 @@ private:
 	uint32_t GetLogoCount();
 	bool ResNameCheck(uint32_t namepoint, const char* name);
 
-	bool CheckForPatchSegment(uint32_t offset, std::initializer_list<uint8_t> bytes);
 	bool CheckForString(uint32_t offset, const char* p);
 
 	// 0 if resource section was unfindable.
@@ -112,6 +98,10 @@ private:
 
 	FileInfo file_info;
 	Filesystem_Stream::InputStream corefile;
+
+	BuildInfo::KnownEngineBuildVersions build_version = BuildInfo::KnownEngineBuildVersions::UnknownBuild;
+	BuildInfo::EngineBuildInfo build_info;
+
 };
 
 #endif

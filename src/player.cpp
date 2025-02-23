@@ -85,6 +85,7 @@
 #include "game_clock.h"
 #include "message_overlay.h"
 #include "audio_midi.h"
+#include "exe_constants.h"
 
 #ifdef __ANDROID__
 #include "platform/android/android.h"
@@ -763,7 +764,7 @@ void Player::CreateGameObjects() {
 
 	int& engine = game_config.engine;
 	std::map<GameConstantType, int32_t> game_constant_overrides;
-	std::map<EXEReader::KnownPatches, int32_t> patches;
+	std::map<int, int32_t> patches;
 
 #ifndef EMSCRIPTEN
 	// Attempt reading ExFont and version information from RPG_RT.exe (not supported on Emscripten)
@@ -855,13 +856,13 @@ void Player::CreateGameObjects() {
 				auto& patch = it->first;
 				auto& patch_var = it->second;
 
-				switch (patch) {
-					case EXEReader::KnownPatches::UnlockPics:
+				switch (static_cast<ExeConstants::KnownPatches>(patch)) {
+					case ExeConstants::KnownPatches::UnlockPics:
 						if (!game_config.patch_unlock_pics.Get()) {
 							game_config.patch_unlock_pics.Set(true);
 						}
 						break;
-					case EXEReader::KnownPatches::DirectMenu:
+					case ExeConstants::KnownPatches::DirectMenu:
 						if (!game_config.patch_direct_menu.Get()) {
 							game_config.patch_direct_menu.Set(patch_var);
 						}
