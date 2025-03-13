@@ -85,7 +85,7 @@ public:
 	 * @param sprite_name new sprite name
 	 * @param index the index of the new sprite.
 	 */
-	void SetOrigSpriteGraphic(std::string sprite_name, int index);
+	void SetOrigSpriteGraphic(std::string_view sprite_name, int index);
 
 	/** Gets the original sprite graphic name */
 	std::string_view GetOrigSpriteName() const;
@@ -94,8 +94,8 @@ public:
 	int GetOrigSpriteIndex() const;
 };
 
-inline void Game_Vehicle::SetOrigSpriteGraphic(std::string sprite_name, int index) {
-	data()->orig_sprite_name = std::move(sprite_name);
+inline void Game_Vehicle::SetOrigSpriteGraphic(std::string_view sprite_name, int index) {
+	data()->orig_sprite_name = ToString(sprite_name);
 	data()->orig_sprite_id = index;
 }
 

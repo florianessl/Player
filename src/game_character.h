@@ -262,7 +262,7 @@ public:
 	 *
 	 * @return sprite name
 	 */
-	const std::string& GetSpriteName() const;
+	std::string_view GetSpriteName() const;
 
 	/** @return true if this has a tile sprite */
 	bool HasTileSprite() const;
@@ -273,7 +273,7 @@ public:
 	 * @param sprite_name new sprite name
 	 * @param index the index of the new sprite.
 	 */
-	void SetSpriteGraphic(std::string sprite_name, int index);
+	void SetSpriteGraphic(std::string_view sprite_name, int index);
 
 	/**
 	 * Sets sprite name from a move route command. Usually the name of the graphic file.
@@ -282,7 +282,7 @@ public:
 	 * @param sprite_name new sprite name
 	 * @param index the index of the new sprite.
 	 */
-	virtual void MoveRouteSetSpriteGraphic(std::string sprite_name, int index);
+	virtual void MoveRouteSetSpriteGraphic(std::string_view sprite_name, int index);
 
 	/**
 	 * Gets sprite index of character.
@@ -1113,17 +1113,17 @@ inline void Game_Character::SetMoveFailureCount(int count) {
 	data()->easyrpg_move_failure_count = count;
 }
 
-inline const std::string& Game_Character::GetSpriteName() const {
+inline std::string_view Game_Character::GetSpriteName() const {
 	return data()->sprite_name;
 }
 
-inline void Game_Character::SetSpriteGraphic(std::string sprite_name, int index) {
-	data()->sprite_name = std::move(sprite_name);
+inline void Game_Character::SetSpriteGraphic(std::string_view sprite_name, int index) {
+	data()->sprite_name = ToString(sprite_name);
 	data()->sprite_id = index;
 }
 
-inline void Game_Character::MoveRouteSetSpriteGraphic(std::string sprite_name, int index) {
-	SetSpriteGraphic(std::move(sprite_name), index);
+inline void Game_Character::MoveRouteSetSpriteGraphic(std::string_view sprite_name, int index) {
+	SetSpriteGraphic(sprite_name, index);
 }
 
 inline int Game_Character::GetSpriteIndex() const {

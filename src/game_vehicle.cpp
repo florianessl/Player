@@ -45,21 +45,21 @@ Game_Vehicle::Game_Vehicle(Type type)
 		case None:
 			break;
 		case Boat:
-			SetSpriteGraphic(ToString(lcf::Data::system.boat_name), lcf::Data::system.boat_index);
+			SetSpriteGraphic(lcf::Data::system.boat_name, lcf::Data::system.boat_index);
 			SetMapId(lcf::Data::treemap.start.boat_map_id);
 			SetX(lcf::Data::treemap.start.boat_x);
 			SetY(lcf::Data::treemap.start.boat_y);
 			SetMoveSpeed(lcf::rpg::EventPage::MoveSpeed_normal);
 			break;
 		case Ship:
-			SetSpriteGraphic(ToString(lcf::Data::system.ship_name), lcf::Data::system.ship_index);
+			SetSpriteGraphic(lcf::Data::system.ship_name, lcf::Data::system.ship_index);
 			SetMapId(lcf::Data::treemap.start.ship_map_id);
 			SetX(lcf::Data::treemap.start.ship_x);
 			SetY(lcf::Data::treemap.start.ship_y);
 			SetMoveSpeed(lcf::rpg::EventPage::MoveSpeed_normal);
 			break;
 		case Airship:
-			SetSpriteGraphic(ToString(lcf::Data::system.airship_name), lcf::Data::system.airship_index);
+			SetSpriteGraphic(lcf::Data::system.airship_name, lcf::Data::system.airship_index);
 			SetMapId(lcf::Data::treemap.start.airship_map_id);
 			SetX(lcf::Data::treemap.start.airship_x);
 			SetY(lcf::Data::treemap.start.airship_y);

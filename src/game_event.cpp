@@ -176,7 +176,7 @@ void Game_Event::RefreshPage() {
 	const auto* old_page = page;
 	page = new_page;
 
-	SetSpriteGraphic(ToString(page->character_name), page->character_index);
+	SetSpriteGraphic(page->character_name, page->character_index);
 
 	if (IsStopping()
 			&& (!old_page
