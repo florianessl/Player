@@ -174,7 +174,7 @@ void Game_Character::UpdateMovement(int amount) {
 }
 
 void Game_Character::UpdateAnimation() {
-	const auto speed = Utils::Clamp(GetMoveSpeed(), 1, 6);
+	const auto speed = Utils::Clamp(GetMoveSpeed(), 1, MAX_CHARACTER_SPEED);
 
 	if (IsSpinning()) {
 		const auto limit = GetSpinAnimFrames(speed);
@@ -378,13 +378,13 @@ void Game_Character::UpdateMoveRoute(int32_t& current_index, const lcf::rpg::Mov
 					SetFacingLocked(false);
 					break;
 				case Code::increase_movement_speed:
-					SetMoveSpeed(min(GetMoveSpeed() + 1, 6));
+					SetMoveSpeed(min(GetMoveSpeed() + 1, MAX_CHARACTER_SPEED));
 					break;
 				case Code::decrease_movement_speed:
 					SetMoveSpeed(max(GetMoveSpeed() - 1, 1));
 					break;
 				case Code::increase_movement_frequence:
-					SetMoveFrequency(min(GetMoveFrequency() + 1, 8));
+					SetMoveFrequency(min(GetMoveFrequency() + 1, MAX_CHARACTER_FREQUENCY));
 					break;
 				case Code::decrease_movement_frequence:
 					SetMoveFrequency(max(GetMoveFrequency() - 1, 1));

@@ -795,7 +795,7 @@ void Scene_Debug::UpdateRangeListWindow() {
 			break;
 		case eMoveSpeed:
 			addItem("Move Speed");
-			addItem("Range: 1-7");
+			addItem(fmt::format("Range: 1-{}", Game_Character::MAX_CHARACTER_SPEED + 1));
 			break;
 		case eCallBattleEvent:
 			if (is_battle) {
@@ -1108,7 +1108,7 @@ void Scene_Debug::DoLevel() {
 }
 
 void Scene_Debug::DoMoveSpeed() {
-	Main_Data::game_player->SetMoveSpeed(Utils::Clamp<int>(GetFrame().value, 1, 7));
+	Main_Data::game_player->SetMoveSpeed(Utils::Clamp<int>(GetFrame().value, 1, Game_Character::MAX_CHARACTER_SPEED + 1));
 
 	Pop();
 }

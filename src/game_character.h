@@ -43,6 +43,9 @@ public:
 		Vehicle
 	};
 
+	constexpr static int MAX_CHARACTER_SPEED = 6;
+	constexpr static int MAX_CHARACTER_FREQUENCY = 8;
+
 	static std::string_view TypeToStr(Type t);
 
 	virtual ~Game_Character() = default;
@@ -1337,11 +1340,11 @@ constexpr int Game_Character::GetDirection180Degree(int dir) {
 }
 
 constexpr int Game_Character::GetMaxStopCountForStep(int freq) {
-	return freq >= 8 ? 0 : 1 << (9 - freq);
+	return freq >= MAX_CHARACTER_FREQUENCY ? 0 : 1 << (MAX_CHARACTER_FREQUENCY + 1 - freq);
 }
 
 constexpr int Game_Character::GetMaxStopCountForTurn(int freq) {
-	return freq >= 8 ? 0 : 1 << (8 - freq);
+	return freq >= MAX_CHARACTER_FREQUENCY ? 0 : 1 << (MAX_CHARACTER_FREQUENCY - freq);
 }
 
 constexpr int Game_Character::GetMaxStopCountForWait(int freq) {
