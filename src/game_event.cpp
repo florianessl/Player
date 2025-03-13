@@ -619,3 +619,8 @@ const lcf::rpg::EventPage *Game_Event::GetActivePage() const {
 	return page;
 }
 
+void Game_Event::ResetGraphic() {
+	SetSpriteGraphic(page->character_name, page->character_index);
+	SetAnimationType(static_cast<lcf::rpg::EventPage::AnimType>(page->animation_type));
+	SetTransparency(page->translucent ? 3 : 0);
+}

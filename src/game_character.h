@@ -860,6 +860,9 @@ public:
 	/** @return true if sprite is hidden */
 	bool IsSpriteHidden() const;
 
+	/**  */
+	virtual void ResetGraphic() {}
+
 	/**
 	 * Tests if animation type is any fixed state.
 	 *
@@ -977,6 +980,16 @@ class Game_CharacterDataStorage : public Game_Character
 	private:
 		T _data = {};
 };
+
+namespace MoveRouteEx {
+	void SetFixedGraphicCharset(Game_Character& character, std::string_view sprite_name, int mode, int x, int y);
+	template<int delta>
+	void IncrementDecrementFixedGraphic(Game_Character& character);
+	template<int delta_x, int delta_y>
+	void IncrementDecrementFixedGraphic_xy(Game_Character& character);
+	void CloneEventGraphic(Game_Character& character, int mode, int id);
+	void CloneActorGraphic(Game_Character& character, int mode, int id);
+}
 
 constexpr bool Game_Character::IsDirectionFixedAnimationType(AnimType at) {
 	return

@@ -17,11 +17,14 @@
 
 // Headers
 #include "audio.h"
+#include "game_actors.h"
 #include "game_character.h"
 #include "game_map.h"
+#include "game_party.h"
 #include "game_player.h"
 #include "game_switches.h"
 #include "game_system.h"
+#include "game_variables.h"
 #include "input.h"
 #include "main_data.h"
 #include "game_message.h"
@@ -350,7 +353,7 @@ void Game_Character::UpdateMoveRoute(int32_t& current_index, const lcf::rpg::Mov
 			SetFacing(GetDirection());
 			SetMaxStopCountForTurn();
 			SetStopCount(0);
-		} else {
+		} else if (cmd <= Code::decrease_transp) {
 			switch (cmd) {
 				case Code::wait:
 					SetMaxStopCountForWait();
@@ -448,6 +451,77 @@ void Game_Character::UpdateMoveRoute(int32_t& current_index, const lcf::rpg::Mov
 				default:
 					break;
 			}
+		} else if (Player::HasEasyRpgExtensions()) {
+			switch (cmd) {
+				case Code::EasyRpg_SetMoveSpeed:
+					SetMoveSpeed(std::clamp(move_command.parameter_a, 1, MAX_CHARACTER_SPEED));
+					break;
+				case Code::EasyRpg_SetMoveFrequency:
+					SetMoveFrequency(std::clamp(move_command.parameter_a, 1, MAX_CHARACTER_FREQUENCY));
+					break;
+				case Code::EasyRpg_SetTransparency:
+					SetTransparency(move_command.parameter_a);
+					break;
+				case Code::EasyRpg_SetLayer:
+					SetMoveFrequency(std::clamp(move_command.parameter_a, 0, 2));
+					break;
+				case Code::EasyRpg_SetFlying:
+					SetFlying(move_command.parameter_a > 0);
+					break;
+				case Code::EasyRpg_WaitFixed: // Parameter A: stop time
+					// Mirrors formula of Game_Interpreter::SetupWait
+					if (move_command.parameter_a == 0) {
+						// 0.0 waits 1 frame
+						SetMaxStopCount(1);
+					} else {
+						SetMaxStopCount(move_command.parameter_a * DEFAULT_FPS / 10);
+					}
+					SetStopCount(0);
+					break;
+				case Code::EasyRpg_WaitFrame: // Parameter A: stop count
+					if (move_command.parameter_a == 0) {
+						SetMaxStopCount(1);
+					} else {
+						SetMaxStopCount(move_command.parameter_a);
+					}
+					SetStopCount(0);
+					break;
+				case Code::EasyRpg_CloneEventGraphic: // Parameter A: mode, Parameter B: id
+					MoveRouteEx::CloneEventGraphic(*this, move_command.parameter_a, move_command.parameter_b);
+					break;
+				case Code::EasyRpg_CloneActorGraphic: // Parameter A: mode, Parameter B: id
+					MoveRouteEx::CloneActorGraphic(*this, move_command.parameter_a, move_command.parameter_b);
+					break;
+				case Code::EasyRpg_ClearGraphic:
+					SetSpriteGraphic("", 0);
+					break;
+				case Code::EasyRpg_RevertGraphic:
+					ResetGraphic();
+					break;
+				case Code::EasyRpg_SetFixedGraphic: // String: File, Parameter A: mode, Parameter B: x, Parameter C: y
+					MoveRouteEx::SetFixedGraphicCharset(*this, move_command.parameter_string, move_command.parameter_a, move_command.parameter_b, move_command.parameter_c);
+					break;
+				case Code::EasyRpg_IncrementFixedGraphic_i:
+					MoveRouteEx::IncrementDecrementFixedGraphic<1>(*this);
+					break;
+				case Code::EasyRpg_DecrementFixedGraphic_i:
+					MoveRouteEx::IncrementDecrementFixedGraphic<-1>(*this);
+					break;
+				case Code::EasyRpg_IncrementFixedGraphic_x:
+					MoveRouteEx::IncrementDecrementFixedGraphic_xy<1, 0>(*this);
+					break;
+				case Code::EasyRpg_IncrementFixedGraphic_y:
+					MoveRouteEx::IncrementDecrementFixedGraphic_xy<0, 1>(*this);
+					break;
+				case Code::EasyRpg_DecrementFixedGraphic_x:
+					MoveRouteEx::IncrementDecrementFixedGraphic_xy<-1, 0>(*this);
+					break;
+				case Code::EasyRpg_DecrementFixedGraphic_y:
+					MoveRouteEx::IncrementDecrementFixedGraphic_xy<0, -1>(*this);
+					break;
+				default:
+					break;
+			}
 		}
 		SetMoveFailureCount(0);
 		++current_index;
@@ -457,7 +531,6 @@ void Game_Character::UpdateMoveRoute(int32_t& current_index, const lcf::rpg::Mov
 		}
 	} // while (true)
 }
-
 
 bool Game_Character::MakeWay(int from_x, int from_y, int to_x, int to_y) {
 	return Game_Map::MakeWay(*this, from_x, from_y, to_x, to_y);
@@ -1230,5 +1303,108 @@ void Game_Character::UpdateFacing() {
 		}
 	} else {
 		SetFacing(dir);
+	}
+}
+
+void MoveRouteEx::SetFixedGraphicCharset(Game_Character& character, std::string_view sprite_name, int mode, int x, int y) {
+	int frame = 0, index = 0;
+
+	if (mode == 1) {
+		x = Main_Data::game_variables->Get(x);
+		y = Main_Data::game_variables->Get(y);
+	}
+
+	if (!character.GetSpriteName().empty()) {
+		index = x / 3 + y * 4;
+		frame = x % 3;
+	} else {
+		index = x;
+	}
+
+	character.SetAnimationType(Game_Character::AnimType::AnimType_fixed_graphic);
+	character.SetSpriteGraphic(sprite_name, index);
+	character.SetAnimFrame(frame);
+}
+template<int delta>
+void MoveRouteEx::IncrementDecrementFixedGraphic(Game_Character& character) {
+	static_assert(delta >= -1 && delta <= 1);
+
+	int index = character.GetSpriteIndex();
+
+	if (!character.GetSpriteName().empty()) {
+		index = std::clamp(index + delta, 0, 95);
+	} else {
+		index = std::clamp(index + delta, 0, 143);
+	}
+	character.SetAnimationType(Game_Character::AnimType::AnimType_fixed_graphic);
+	character.SetSpriteGraphic(character.GetSpriteName(), index);
+	character.SetAnimFrame(0);
+}
+
+template<int delta_x, int delta_y>
+void MoveRouteEx::IncrementDecrementFixedGraphic_xy(Game_Character& character) {
+	static_assert(delta_x == 0 ^ delta_y == 0);
+	static_assert(delta_x >= -1 && delta_x <= 1 && delta_y >= -1 && delta_y <= 1);
+
+	int index = character.GetSpriteIndex();
+
+	if (!character.GetSpriteName().empty()) {
+		int x = std::clamp((index % 4) + delta_x, 0, 11);
+		int y = std::clamp((index / 4) + delta_y, 0, 7);
+		character.SetSpriteGraphic(character.GetSpriteName(), x / 3 + y * 4);
+		character.SetAnimFrame(x % 3);
+	} else {
+		index = std::clamp(index + delta_x + delta_y * 6, 0, 143);
+		character.SetSpriteGraphic(character.GetSpriteName(), index);
+		character.SetAnimFrame(0);
+	}
+	character.SetAnimationType(Game_Character::AnimType::AnimType_fixed_graphic);
+}
+
+void MoveRouteEx::CloneEventGraphic(Game_Character& character, int mode, int id) {
+	if (mode == 1) { // Indirect
+		id = Main_Data::game_variables->Get(id);
+	}
+	if (id <= 0 || id == Game_Character::CharThisEvent) {
+		return;
+	}
+
+	auto ch = Game_Character::GetCharacter(id, id);
+
+	if (!ch) {
+		Output::Warning("Invalid event ID {}", id);
+		return;
+	}
+
+	character.MoveRouteSetSpriteGraphic(ch->GetSpriteName(), ch->GetSpriteIndex());
+}
+
+void MoveRouteEx::CloneActorGraphic(Game_Character& character, int mode, int id) {
+	Game_Actor* actor;
+
+	switch (mode) {
+		case 0: // Player
+			character.MoveRouteSetSpriteGraphic(Main_Data::game_player->GetSpriteName(), Main_Data::game_player->GetSpriteIndex());
+			break;
+		case 1: // Party Member
+			actor = Main_Data::game_actors->GetActor(id);
+
+			if (!actor) {
+				Output::Warning("Invalid actor ID {}", id);
+				break;
+			}
+
+			character.MoveRouteSetSpriteGraphic(ToString(actor->GetSpriteName()), actor->GetSpriteIndex());
+			break;
+		case 2: // Party Member Indirect
+			actor = Main_Data::game_actors->GetActor(Main_Data::game_variables->Get(id));
+
+			if (!actor) {
+				Output::Warning("Invalid actor ID {}", Main_Data::game_variables->Get(id));
+				break;
+			}
+
+			character.MoveRouteSetSpriteGraphic(ToString(actor->GetSpriteName()), actor->GetSpriteIndex());
+			break;
 	}
 }

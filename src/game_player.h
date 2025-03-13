@@ -81,7 +81,7 @@ public:
 	void Update();
 
 	/** Resets graphic based on current party */
-	void ResetGraphic();
+	void ResetGraphic() override;
 
 	bool GetOnOffVehicle();
 	bool InVehicle() const;

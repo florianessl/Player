@@ -165,6 +165,8 @@ public:
 	/** @returns the number of pages this event has */
 	int GetNumPages() const;
 
+	/** Resets graphic based on current event page */
+	void ResetGraphic() override;
 protected:
 	/** Check for and fix incorrect data after loading save game */
 	void SanitizeData();
