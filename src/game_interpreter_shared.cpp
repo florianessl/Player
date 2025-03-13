@@ -218,16 +218,17 @@ lcf::rpg::MoveCommand Game_Interpreter_Shared::DecodeMove(lcf::DBArray<int32_t>:
 	lcf::rpg::MoveCommand cmd;
 	cmd.command_id = *it++;
 
-	switch (cmd.command_id) {
-		case 32:	// Switch ON
-		case 33:	// Switch OFF
+	using MoveCommand_Code = lcf::rpg::MoveCommand::Code;
+	switch (static_cast<MoveCommand_Code>(cmd.command_id)) {
+		case MoveCommand_Code::switch_on:
+		case MoveCommand_Code::switch_off:
 			cmd.parameter_a = DecodeInt(it);
 			break;
-		case 34:	// Change Graphic
+		case MoveCommand_Code::change_graphic:
 			cmd.parameter_string = lcf::DBString(DecodeString(it));
 			cmd.parameter_a = DecodeInt(it);
 			break;
-		case 35:	// Play Sound Effect
+		case MoveCommand_Code::play_sound_effect:
 			cmd.parameter_string = lcf::DBString(DecodeString(it));
 			cmd.parameter_a = DecodeInt(it);
 			cmd.parameter_b = DecodeInt(it);
