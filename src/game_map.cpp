@@ -1853,15 +1853,28 @@ bool Game_Map::IsAnyMovePending() {
 	return false;
 }
 
-void Game_Map::RemoveAllPendingMoves() {
+void Game_Map::RemoveAllPendingMoves(lcf::Span<int> events_to_ignore) {
 	const auto map_id = GetMapId();
-	Main_Data::game_player->CancelMoveRoute();
+
+	auto ignore_evt = [&events_to_ignore](int evt_id) {
+		return std::find(events_to_ignore.begin(), events_to_ignore.end(), evt_id) != events_to_ignore.end();
+	};
+
+	if (!ignore_evt(Game_Character::CharPlayer)) {
+		Main_Data::game_player->CancelMoveRoute();
+	}
 	for (auto& vh: vehicles) {
+		if (ignore_evt(Game_Vehicle::TypeToEventId(static_cast<Game_Vehicle::Type>(vh.GetVehicleType())))) {
+			continue;
+		}
 		if (vh.GetMapId() == map_id) {
 			vh.CancelMoveRoute();
 		}
 	}
 	for (auto& ev: events) {
+		if (ignore_evt(ev.GetId())) {
+			continue;
+		}
 		ev.CancelMoveRoute();
 	}
 }

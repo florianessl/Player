@@ -693,7 +693,7 @@ namespace Game_Map {
 	bool IsAnyMovePending();
 
 	/** Cancel active move routes for all events on this map */
-	void RemoveAllPendingMoves();
+	void RemoveAllPendingMoves(lcf::Span<int> events_to_ignore = {});
 
 	void UpdateProcessedFlags(bool is_preupdate);
 	bool UpdateCommonEvents(MapUpdateAsyncContext& actx);

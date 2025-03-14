@@ -92,6 +92,8 @@ public:
 
 	/** Gets the original sprite graphic index */
 	int GetOrigSpriteIndex() const;
+
+	static constexpr int TypeToEventId(Type vehicle_type);
 };
 
 inline void Game_Vehicle::SetOrigSpriteGraphic(std::string sprite_name, int index) {
@@ -132,5 +134,18 @@ inline int Game_Vehicle::GetVehicleType() const {
 	return data()->vehicle;
 }
 
+constexpr int Game_Vehicle::TypeToEventId(Type vehicle_type) {
+	switch (vehicle_type) {
+		case Boat:
+			return Game_Character::CharBoat;
+		case Ship:
+			return Game_Character::CharShip;
+		case Airship:
+			return Game_Character::CharAirship;
+		default:
+			break;
+	}
+	return 0;
+}
 
 #endif

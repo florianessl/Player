@@ -242,6 +242,8 @@ bool Game_Interpreter_Map::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CmdSetup<&Game_Interpreter_Map::CommandToggleAtbMode, 0>(com);
 		case Cmd::EasyRpg_TriggerEventAt:
 			return CmdSetup<&Game_Interpreter_Map::CommandEasyRpgTriggerEventAt, 4>(com);
+		case static_cast<Cmd>(50): // Cmd::EasyRpg_HaltEventMovement:
+			return CmdSetup<&Game_Interpreter_Map::CommandEasyRpgHaltEventMovement, 3>(com);
 		case Cmd::EasyRpg_WaitForSingleMovement:
 			return CmdSetup<&Game_Interpreter_Map::CommandEasyRpgWaitForSingleMovement, 6>(com);
 		default:
@@ -886,6 +888,41 @@ bool Game_Interpreter_Map::CommandEasyRpgTriggerEventAt(lcf::rpg::EventCommand c
 	}
 
 	Main_Data::game_player->TriggerEventAt(x, y, GetFrame().triggered_by_decision_key, face_player);
+
+	return true;
+}
+
+bool Game_Interpreter_Map::CommandEasyRpgHaltEventMovement(lcf::rpg::EventCommand const& com) {
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	std::vector<int> evt_ids;
+	evt_ids.reserve(com.parameters.size() - 2);
+
+	for (int idx = 2; idx < com.parameters.size(); ++idx) {
+		evt_ids[idx - 2] = ValueOrVariable(com.parameters[1], com.parameters[idx]);
+	}
+
+	switch (com.parameters[0]) {
+		case 0: //Cancel only routes for given event ids
+		{
+			for (int evt_id : evt_ids) {
+				Game_Character* chara = GetCharacter(evt_id, "EasyRpgHaltEventMovement");
+
+				if (chara != nullptr) {
+					chara->CancelMoveRoute();
+				}
+			}
+			break;
+		}
+		case 1: { //Cancel all pending moves except for given event ids
+			Game_Map::RemoveAllPendingMoves(evt_ids);
+			break;
+		}
+		default:
+			break;
+	}
 
 	return true;
 }
