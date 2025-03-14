@@ -482,6 +482,7 @@ void Game_Player::ResetGraphic() {
 
 	SetSpriteGraphic(actor->GetSpriteName(), actor->GetSpriteIndex());
 	SetTransparency(actor->GetSpriteTransparency());
+	data()->easyrpg_flip = 0;
 }
 
 bool Game_Player::GetOnOffVehicle() {

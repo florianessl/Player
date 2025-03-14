@@ -623,4 +623,5 @@ void Game_Event::ResetGraphic() {
 	SetSpriteGraphic(page->character_name, page->character_index);
 	SetAnimationType(static_cast<lcf::rpg::EventPage::AnimType>(page->animation_type));
 	SetTransparency(page->translucent ? 3 : 0);
+	data()->easyrpg_flip = 0;
 }

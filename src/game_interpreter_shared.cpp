@@ -243,16 +243,26 @@ lcf::rpg::MoveCommand Game_Interpreter_Shared::DecodeMove(lcf::DBArray<int32_t>:
 		case MoveCommand_Code::EasyRpg_WaitFrame:
 			cmd.parameter_a = DecodeInt(it);
 			break;
+		case MoveCommand_Code::EasyRpg_SetFlipped:
 		case MoveCommand_Code::EasyRpg_CloneEventGraphic:
 		case MoveCommand_Code::EasyRpg_CloneActorGraphic:
 			cmd.parameter_a = DecodeInt(it);
 			cmd.parameter_b = DecodeInt(it);
 			break;
+		case MoveCommand_Code::EasyRpg_ShakeOnce:
 		case MoveCommand_Code::EasyRpg_SetFixedGraphic:
 			cmd.parameter_string = lcf::DBString(DecodeString(it));
 			cmd.parameter_a = DecodeInt(it);
 			cmd.parameter_b = DecodeInt(it);
 			cmd.parameter_c = DecodeInt(it);
+			break;
+		case MoveCommand_Code::EasyRpg_ShakeBegin:
+			cmd.parameter_string = lcf::DBString(DecodeString(it));
+			cmd.parameter_a = DecodeInt(it);
+			cmd.parameter_b = DecodeInt(it);
+			break;
+		case MoveCommand_Code::EasyRpg_ShakeEnd:
+			cmd.parameter_string = lcf::DBString(DecodeString(it));
 			break;
 	}
 

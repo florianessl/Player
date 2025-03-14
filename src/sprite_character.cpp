@@ -40,6 +40,13 @@ void Sprite_Character::Draw(Bitmap &dst) {
 		int row = character->GetFacing();
 		auto frame = character->GetAnimFrame();
 		if (frame >= lcf::rpg::EventPage::Frame_middle2) frame = lcf::rpg::EventPage::Frame_middle;
+		if (character->IsSwapLeftRightRows()) {
+			if (row == 1) {
+				row = 3;
+			} else if (row == 3) {
+				row = 1;
+			}
+		}
 		SetSrcRect({frame * chara_width, row * chara_height, chara_width, chara_height});
 	}
 
@@ -52,6 +59,9 @@ void Sprite_Character::Draw(Bitmap &dst) {
 
 	int bush_split = 4 - character->GetBushDepth();
 	SetBushDepth(bush_split > 3 ? 0 : GetHeight() / bush_split);
+
+	SetFlipX(character->IsFlipX());
+	SetFlipY(character->IsFlipY());
 
 	Sprite::Draw(dst);
 }

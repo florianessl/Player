@@ -486,6 +486,55 @@ void Game_Character::UpdateMoveRoute(int32_t& current_index, const lcf::rpg::Mov
 					}
 					SetStopCount(0);
 					break;
+				case Code::EasyRpg_SetFlipped:
+					if (move_command.parameter_a == 1) {
+						SetFlipX(true);
+						SetFlipY(false);
+					} else if (move_command.parameter_a == 2) {
+						SetFlipX(false);
+						SetFlipY(true);
+					} else if (move_command.parameter_a == 3) {
+						SetFlipX(true);
+						SetFlipY(true);
+					} else {
+						SetFlipX(false);
+						SetFlipY(false);
+					}
+					SetSwapLeftRightRows(move_command.parameter_b == 1);
+					break;
+				case Code::EasyRpg_ShakeOnce: // Parameter A: strength, Parameter B: speed, Parameter C: tenths
+				{
+					/*bool affect_x = move_command.parameter_string == "X";
+					bool affect_y = move_command.parameter_string == "Y";
+					if (!affect_x && !affect_y) {
+						affect_x = true;
+						affect_y = true;
+					}
+					ShakeOnce(affect_x, affect_y, move_command.parameter_a, move_command.parameter_b, move_command.parameter_c* DEFAULT_FPS / 10);*/
+					break;
+				}
+				case Code::EasyRpg_ShakeBegin: // Parameter A: strength, Parameter B: speed
+				{
+					/*bool affect_x = move_command.parameter_string == "X";
+					bool affect_y = move_command.parameter_string == "Y";
+					if (!affect_x && !affect_y) {
+						affect_x = true;
+						affect_y = true;
+					}
+					ShakeBegin(affect_x, affect_y, move_command.parameter_a, move_command.parameter_b);*/
+					break;
+				}
+				case Code::EasyRpg_ShakeEnd:
+				{
+					/*bool affect_x = move_command.parameter_string == "X";
+					bool affect_y = move_command.parameter_string == "Y";
+					if (!affect_x && !affect_y) {
+						affect_x = true;
+						affect_y = true;
+					}
+					ShakeEnd(affect_x, affect_y);*/
+					break;
+				}
 				case Code::EasyRpg_CloneEventGraphic: // Parameter A: mode, Parameter B: id
 					MoveRouteEx::CloneEventGraphic(*this, move_command.parameter_a, move_command.parameter_b);
 					break;

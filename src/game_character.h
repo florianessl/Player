@@ -900,6 +900,13 @@ public:
 	 */
 	int GetBushDepth() const;
 
+	bool IsFlipX() const;
+	void SetFlipX(bool value);
+	bool IsFlipY() const;
+	void SetFlipY(bool value);
+	bool IsSwapLeftRightRows() const;
+	void SetSwapLeftRightRows(bool value);
+
 	enum CharsID {
 		CharPlayer		= 10001,
 		CharBoat		= 10002,
@@ -1393,6 +1400,41 @@ inline bool Game_Character::IsVisible() const {
 	return IsActive() && !IsSpriteHidden() && GetOpacity() > 0;
 }
 
+inline bool Game_Character::IsFlipX() const {
+	return (data()->easyrpg_flip & lcf::rpg::SaveMapEventBase::EasyRpgFlip_x) > 0;
+}
+
+inline void Game_Character::SetFlipX(bool value) {
+	if (value) {
+		data()->easyrpg_flip |= lcf::rpg::SaveMapEventBase::EasyRpgFlip_x;
+	} else {
+		data()->easyrpg_flip &= ~lcf::rpg::SaveMapEventBase::EasyRpgFlip_x;
+	}
+}
+
+inline bool Game_Character::IsFlipY() const {
+	return (data()->easyrpg_flip & lcf::rpg::SaveMapEventBase::EasyRpgFlip_y) > 0;
+}
+
+inline void Game_Character::SetFlipY(bool value) {
+	if (value) {
+		data()->easyrpg_flip |= lcf::rpg::SaveMapEventBase::EasyRpgFlip_y;
+	} else {
+		data()->easyrpg_flip &= ~lcf::rpg::SaveMapEventBase::EasyRpgFlip_y;
+	}
+}
+
+inline bool Game_Character::IsSwapLeftRightRows() const {
+	return (data()->easyrpg_flip & lcf::rpg::SaveMapEventBase::EasyRpgFlip_swap_left_right) > 0;
+}
+
+inline void Game_Character::SetSwapLeftRightRows(bool value) {
+	if (value) {
+		data()->easyrpg_flip |= lcf::rpg::SaveMapEventBase::EasyRpgFlip_swap_left_right;
+	} else {
+		data()->easyrpg_flip &= ~lcf::rpg::SaveMapEventBase::EasyRpgFlip_swap_left_right;
+	}
+}
 template <typename T>
 inline Game_CharacterDataStorage<T>::Game_CharacterDataStorage(Type typ)
 	: Game_Character(typ, nullptr)
