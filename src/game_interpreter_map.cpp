@@ -244,6 +244,8 @@ bool Game_Interpreter_Map::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CmdSetup<&Game_Interpreter_Map::CommandEasyRpgTriggerEventAt, 4>(com);
 		case Cmd::EasyRpg_WaitForSingleMovement:
 			return CmdSetup<&Game_Interpreter_Map::CommandEasyRpgWaitForSingleMovement, 6>(com);
+		case Cmd::EasyRpg_ShakeEvent:
+			return CmdSetup<&Game_Interpreter_Map::CommandEasyRpgShakeEvent, 8>(com);
 		default:
 			return Game_Interpreter::ExecuteCommand(com);
 	}
@@ -938,6 +940,49 @@ bool Game_Interpreter_Map::CommandEasyRpgWaitForSingleMovement(lcf::rpg::EventCo
 	if (output_var > 0) {
 		Main_Data::game_variables->Set(output_var, 0);
 		Game_Map::SetNeedRefresh(true);
+	}
+
+	return true;
+}
+
+bool Game_Interpreter_Map::CommandEasyRpgShakeEvent(lcf::rpg::EventCommand const& com) {
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	int event_id = ValueOrVariable(com.parameters[0], com.parameters[1]);
+
+	Game_Character* ch = GetCharacter(event_id, "EasyRpgShakeEvent");
+	if (ch == nullptr) {
+		return true;
+	}
+
+	int strength = com.parameters[2];
+	int speed = com.parameters[3];
+	int tenths = com.parameters[4];
+	bool wait = com.parameters[5] != 0;
+	int shake_cmd = com.parameters[6];
+
+	bool shake_x_axis = com.parameters[7] == 0 || com.parameters[7] == 2;
+	bool shake_y_axis = com.parameters[7] == 1 || com.parameters[7] == 2;
+
+	switch (shake_cmd) {
+		case 0:
+			if (tenths > 0) {
+				ch->ShakeOnce(shake_x_axis, shake_y_axis, strength, speed, tenths * DEFAULT_FPS / 10);
+				if (wait) {
+					SetupWait(tenths);
+				}
+			} else {
+				ch->ShakeEnd(shake_x_axis, shake_y_axis);
+			}
+			break;
+		case 1:
+			ch->ShakeBegin(shake_x_axis, shake_y_axis, strength, speed);
+			break;
+		case 2:
+			ch->ShakeEnd(shake_x_axis, shake_y_axis);
+			break;
 	}
 
 	return true;

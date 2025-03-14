@@ -76,6 +76,8 @@ int Game_Character::GetScreenX() const {
 	}
 	x -= TILE_SIZE / 2;
 
+	x += GetShakeOffsetX();
+
 	return x;
 }
 
@@ -89,6 +91,8 @@ int Game_Character::GetScreenY(bool apply_jump) const {
 	if (Game_Map::LoopVertical()) {
 		y = Utils::PositiveModulo(y, Game_Map::GetTilesY() * TILE_SIZE);
 	}
+
+	y += GetShakeOffsetY();
 
 	return y;
 }
@@ -133,6 +137,7 @@ void Game_Character::Update() {
 		this->UpdateNextMovementAction();
 	}
 	UpdateFlash();
+	UpdateShake();
 
 	if (IsStopping()) {
 		if (GetStopCount() == 0 || IsMoveRouteOverwritten() ||
@@ -215,6 +220,20 @@ void Game_Character::UpdateAnimation() {
 
 void Game_Character::UpdateFlash() {
 	Flash::Update(data()->flash_current_level, data()->flash_time_left);
+}
+
+void Game_Character::UpdateShake() {
+	Shake::Update(data()->easyrpg_shake_x.position,
+		data()->easyrpg_shake_x.time_left,
+		data()->easyrpg_shake_x.strength,
+		data()->easyrpg_shake_x.speed,
+		data()->easyrpg_shake_x.continuous);
+
+	Shake::Update(data()->easyrpg_shake_y.position,
+		data()->easyrpg_shake_y.time_left,
+		data()->easyrpg_shake_y.strength,
+		data()->easyrpg_shake_y.speed,
+		data()->easyrpg_shake_y.continuous);
 }
 
 void Game_Character::UpdateMoveRoute(int32_t& current_index, const lcf::rpg::MoveRoute& current_route, bool is_overwrite) {

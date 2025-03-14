@@ -28,6 +28,7 @@
 #include <lcf/rpg/eventpage.h>
 #include <lcf/rpg/savemapeventbase.h>
 #include "drawable.h"
+#include "shake.h"
 #include "utils.h"
 
 /**
@@ -879,6 +880,13 @@ public:
 	 */
 	int GetBushDepth() const;
 
+	int GetShakeOffsetX() const;
+	int GetShakeOffsetY() const;
+
+	void ShakeOnce(bool affect_x_axis, bool affect_y_axis, int power, int speed, int tenths);
+	void ShakeBegin(bool affect_x_axis, bool affect_y_axis, int power, int speed);
+	void ShakeEnd(bool affect_x_axis, bool affect_y_axis);
+
 	enum CharsID {
 		CharPlayer		= 10001,
 		CharBoat		= 10002,
@@ -927,6 +935,7 @@ protected:
 	void IncAnimCount();
 	void IncAnimFrame();
 	void UpdateFlash();
+	void UpdateShake();
 	bool BeginMoveRouteJump(int32_t& current_index, const lcf::rpg::MoveRoute& current_route);
 
 	lcf::rpg::SaveMapEventBase* data();
@@ -1360,6 +1369,58 @@ constexpr int Game_Character::GetSpinAnimFrames(int speed) {
 
 inline bool Game_Character::IsVisible() const {
 	return IsActive() && !IsSpriteHidden() && GetOpacity() > 0;
+}
+
+inline int Game_Character::GetShakeOffsetX() const {
+	return data()->easyrpg_shake_x.position;
+}
+
+inline int Game_Character::GetShakeOffsetY() const {
+	return data()->easyrpg_shake_y.position;
+}
+
+inline void Game_Character::ShakeOnce(bool affect_x_axis, bool affect_y_axis, int power, int speed, int tenths) {
+	if (affect_x_axis) {
+		data()->easyrpg_shake_x.strength = power;
+		data()->easyrpg_shake_x.speed = speed;
+		data()->easyrpg_shake_x.time_left = tenths;
+		data()->easyrpg_shake_x.continuous = false;
+	}
+	if (affect_y_axis) {
+		data()->easyrpg_shake_y.strength = power;
+		data()->easyrpg_shake_y.speed = speed;
+		data()->easyrpg_shake_y.time_left = tenths;
+		data()->easyrpg_shake_y.continuous = false;
+	}
+}
+
+inline void Game_Character::ShakeBegin(bool affect_x_axis, bool affect_y_axis, int power, int speed) {
+	if (affect_x_axis) {
+		data()->easyrpg_shake_x.strength = power;
+		data()->easyrpg_shake_x.speed = speed;
+		data()->easyrpg_shake_x.time_left = Shake::kShakeContinuousTimeStart;
+		data()->easyrpg_shake_x.continuous = true;
+	}
+	if (affect_y_axis) {
+		data()->easyrpg_shake_y.strength = power;
+		data()->easyrpg_shake_y.speed = speed;
+		data()->easyrpg_shake_y.time_left = Shake::kShakeContinuousTimeStart;
+		data()->easyrpg_shake_y.continuous = true;
+	}
+}
+
+inline void Game_Character::ShakeEnd(bool affect_x_axis, bool affect_y_axis) {
+	if (affect_x_axis) {
+		data()->easyrpg_shake_x.position = 0;
+		data()->easyrpg_shake_x.time_left = 0;
+		// In contract to RPG_RT's screen shaking, the continuous flag is reset here.
+		data()->easyrpg_shake_x.continuous = false;
+	}
+	if (affect_y_axis) {
+		data()->easyrpg_shake_y.position = 0;
+		data()->easyrpg_shake_y.time_left = 0;
+		data()->easyrpg_shake_y.continuous = false;
+	}
 }
 
 template <typename T>

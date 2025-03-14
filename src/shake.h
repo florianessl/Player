@@ -22,7 +22,7 @@
 #include <cstdint>
 #include "utils.h"
 
-/** Contains helper functions for flash effect */
+/** Contains helper functions for shake effect */
 namespace Shake {
 static constexpr int kShakeContinuousTimeStart = 65535;
 
