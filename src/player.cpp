@@ -717,6 +717,19 @@ void Player::CreateGameObjects() {
 
 	LoadDatabase();
 
+	if (game_config.lcf_overrides.size() > 0) {
+
+		for (auto& p : game_config.lcf_overrides) {
+			if (StartsWith(p.first, "ldb.")) {
+				lcf::InspectPath path(p.first.substr(4), 1);
+				lcf::LDB_Reader::OverrideString(lcf::Data::data, path, p.second);
+			} else if (StartsWith(p.first, "lmt.")) {
+				lcf::InspectPath path(p.first.substr(4), 1);
+				lcf::LMT_Reader::OverrideString(lcf::Data::treemap, path, p.second);
+			}
+		}
+	}
+
 	bool no_rtp_warning_flag = false;
 	Player::has_custom_resolution = false;
 	{ // Scope lifetime of variables for ini parsing

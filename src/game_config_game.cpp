@@ -229,6 +229,8 @@ void Game_ConfigGame::LoadFromStream(Filesystem_Stream::InputStream& is) {
 	if (patch_direct_menu.FromIni(ini)) {
 		patch_override = true;
 	}
+
+	lcf_overrides = ini.GetSection("LcfOverride");
 }
 
 void Game_ConfigGame::PrintActivePatches() {

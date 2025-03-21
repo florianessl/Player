@@ -80,6 +80,8 @@ struct Game_ConfigGame {
 
 	/** Outputs a list of active patches */
 	void PrintActivePatches();
+
+	std::map<std::string, std::string> lcf_overrides;
 };
 
 #endif
