@@ -158,9 +158,12 @@ int Game_Interpreter_Shared::ValueOrVariableBitfield(lcf::rpg::EventCommand cons
 	return com.parameters[val_idx];
 }
 
+template<bool validate_patches>
 std::string_view Game_Interpreter_Shared::CommandStringOrVariable(lcf::rpg::EventCommand const& com, int mode_idx, int val_idx) {
-	if (!Player::IsPatchManiac()) {
-		return com.string;
+	if constexpr (validate_patches) {
+		if (!Player::IsPatchManiac()) {
+			return com.string;
+		}
 	}
 
 	assert(mode_idx != val_idx);
@@ -253,3 +256,6 @@ template int Game_Interpreter_Shared::ValueOrVariableBitfield<true, true, false,
 
 //variant for "Ex" commands
 template int Game_Interpreter_Shared::ValueOrVariableBitfield<false, true, true, true>(int, int, int, const Game_BaseInterpreterContext&);
+
+template std::string_view Game_Interpreter_Shared::CommandStringOrVariable<true>(lcf::rpg::EventCommand const& com, int mode_idx, int val_idx);
+template std::string_view Game_Interpreter_Shared::CommandStringOrVariable<false>(lcf::rpg::EventCommand const& com, int mode_idx, int val_idx);

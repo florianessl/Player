@@ -71,6 +71,9 @@
 #include "baseui.h"
 #include "algo.h"
 #include "rand.h"
+#include <lcf/ldb/reader.h>
+#include <lcf/lmt/reader.h>
+#include <lcf/lmu/reader.h>
 
 using namespace Game_Interpreter_Shared;
 
@@ -794,6 +797,8 @@ bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CmdSetup<&Game_Interpreter::CommandEasyRpgCloneMapEvent, 10>(com);
 		case Cmd::EasyRpg_DestroyMapEvent:
 			return CmdSetup<&Game_Interpreter::CommandEasyRpgDestroyMapEvent, 2>(com);
+		case static_cast<Cmd>(2060):
+			return Game_Interpreter::CommandEasyRpgInspectLcfData(com);
 		default:
 			return true;
 	}
@@ -5649,4 +5654,264 @@ int Game_Interpreter::ManiacBitmask(int value, int mask) const {
 	}
 
 	return value;
+}
+
+bool Game_Interpreter::CommandEasyRpgInspectLcfData(lcf::rpg::EventCommand const& com) {
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+	constexpr int OFFS_PATH = 11;
+
+	int start, end;
+	bool target_eval_result = DecodeTargetEvaluationMode<
+		/* validate_patches */ false,
+		/* support_range_indirect */ true,
+		/* support_expressions */ false,
+		/* support_bitmask */ true,
+		/* support_scopes */ false
+	>(com, start, end);
+	if (!target_eval_result) {
+		Output::Warning("EasyRpgInspectLcfData: Unsupported target evaluation mode {}", com.parameters[0]);
+		return true;
+	}
+
+	int output_mode = com.parameters[3];
+	int access_type = com.parameters[4];
+
+	int cnt_var_id = ValueOrVariable<false, true, true, true>(
+		com.parameters[8],
+		com.parameters[7]);
+
+	lcf::InspectPath path;
+	int extract_count = end - start + 1;
+
+	if (access_type == 0) {
+		std::string_view path_str = CommandStringOrVariable<false>(com, 6, 5);
+		if (StartsWith(path_str, "LDB.")) {
+			access_type = 1;
+			path_str = path_str.substr(4);
+		} else if (StartsWith(path_str, "LMT.")) {
+			access_type = 2;
+			path_str = path_str.substr(4);
+		} else if (StartsWith(path_str, "LMU.")) {
+			access_type = 3;
+			path_str = path_str.substr(4);
+		} else if (StartsWith(path_str, "LSD.")) {
+			access_type = 4;
+			path_str = path_str.substr(4);
+		}
+		path = lcf::InspectPath(path_str, extract_count);
+	} else {
+		int i = OFFS_PATH;
+		std::vector<std::pair<int, int>> path_nodes;
+		while (i < com.parameters.size()) {
+			if (i + 3 >= com.parameters.size()) {
+				Output::Warning("EasyRpgInspectLcfData: Couldn't parse path");
+				break;
+			}
+			int field_id = ValueOrVariable<false, true, true, true>(
+				com.parameters[i++],
+				com.parameters[i++]);
+			int index = ValueOrVariable<false, true, true, true>(
+				com.parameters[i++],
+				com.parameters[i++]);
+			path_nodes.push_back({ field_id, index });
+		}
+
+		path = lcf::InspectPath(path_nodes, extract_count);
+	}
+	if (!path.IsValid() || access_type == 0) {
+		Output::Warning("EasyRpgInspectLcfData: Couldn't parse path");
+		return true;
+	}
+
+	auto set_switches = [](int id_start, int expected_count, std::vector<bool>& inspected_data) {
+		int cnt_read = 0;
+		for (int i = 0; i < expected_count; i++) {
+			int sw_id = id_start + i;
+			if (i < inspected_data.size()) {
+				Main_Data::game_switches->Set(sw_id, inspected_data[i]);
+				cnt_read++;
+			} else {
+				Main_Data::game_switches->Set(sw_id, false);
+			}
+			Game_Map::SetNeedRefreshForSwitchChange(sw_id);
+		}
+		return cnt_read;
+	};
+
+	auto set_variables = [](int id_start, int expected_count, std::vector<int>& inspected_data) {
+		int cnt_read = 0;
+		for (int i = 0; i < expected_count; i++) {
+			int var_id = id_start + i;
+			if (i < inspected_data.size()) {
+				Main_Data::game_variables->Set(var_id, static_cast<Game_Variables::Var_t>(inspected_data[i]));
+				cnt_read++;
+			} else {
+				Main_Data::game_variables->Set(var_id, 0);
+			}
+			Game_Map::SetNeedRefreshForVarChange(var_id);
+		}
+		return cnt_read;
+	};
+
+	auto set_strings = [](int id_start, int expected_count, std::vector<std::string>& inspected_data) {
+		int cnt_read = 0;
+		for (int i = 0; i < expected_count; i++) {
+			Game_Strings::Str_Params params{ id_start + i };
+			if (i < inspected_data.size()) {
+				Main_Data::game_strings->Asg(params, inspected_data[i]);
+				cnt_read++;
+			} else {
+				Main_Data::game_strings->Asg(params, "");
+			}
+		}
+		return cnt_read;
+	};
+
+	int cnt_read = 0;
+	switch (access_type) {
+		case 1: // LDB
+			switch (output_mode) {
+				case 0:
+				{
+					auto result = lcf::LDB_Reader::InspectBoolean(lcf::Data::data, path);
+					cnt_read = set_switches(start, extract_count, result);
+					break;
+				}
+				case 1:
+				{
+					auto result = lcf::LDB_Reader::InspectInteger(lcf::Data::data, path);
+					cnt_read = set_variables(start, extract_count, result);
+					break;
+				}
+				case 2:
+				{
+					auto result = lcf::LDB_Reader::InspectString(lcf::Data::data, path);
+					cnt_read = set_strings(start, extract_count, result);
+					break;
+				}
+				default:
+					break;
+			}
+			break;
+		case 2: // LMT
+			switch (output_mode) {
+				case 0:
+				{
+					auto result = lcf::LMT_Reader::InspectBoolean(lcf::Data::treemap, path);
+					cnt_read = set_switches(start, extract_count, result);
+					break;
+				}
+				case 1:
+				{
+					auto result = lcf::LMT_Reader::InspectInteger(lcf::Data::treemap, path);
+					cnt_read = set_variables(start, extract_count, result);
+					break;
+				}
+				case 2:
+				{
+					auto result = lcf::LMT_Reader::InspectString(lcf::Data::treemap, path);
+					cnt_read = set_strings(start, extract_count, result);
+					break;
+				}
+				default:
+					break;
+			}
+			break;
+		case 3: // LMU
+		{
+			int map_id = ValueOrVariable<false, true, true, true>(
+				com.parameters[10],
+				com.parameters[9]);
+
+			std::unique_ptr<lcf::rpg::Map> map_ptr;
+			const lcf::rpg::Map* map;
+			if (map_id == 0 || map_id == Game_Map::GetMapId()) {
+				map = &Game_Map::GetMap();
+			} else {
+				map_ptr = Game_Map::LoadMapFile(map_id);
+				map = map_ptr.get();
+			}
+			if (!map) {
+				break;
+			}
+			switch (output_mode) {
+				case 0:
+				{
+					auto result = lcf::LMU_Reader::InspectBoolean(*map, path);
+					cnt_read = set_switches(start, extract_count, result);
+					break;
+				}
+				case 1:
+				{
+					auto result = lcf::LMU_Reader::InspectInteger(*map, path);
+					cnt_read = set_variables(start, extract_count, result);
+					break;
+				}
+				case 2:
+				{
+					auto result = lcf::LMU_Reader::InspectString(*map, path);
+					cnt_read = set_strings(start, extract_count, result);
+					break;
+				}
+				default:
+					break;
+			}
+			break;
+		}
+		case 4: // LSD
+		{
+			int save_id = ValueOrVariable<false, true, true, true>(
+				com.parameters[10],
+				com.parameters[9]);
+
+			if (save_id == 0) {
+				//TODO: get latest save_id
+			}
+			auto savefs = FileFinder::Save();
+			std::string save_name = Scene_Save::GetSaveFilename(savefs, save_id);
+			auto save_stream = FileFinder::Save().OpenInputStream(save_name);
+
+			if (!save_stream) {
+				Output::Debug("EasyRpgInspectLcfData: Save not found {}", save_id);
+				return true;
+			}
+			auto save = lcf::LSD_Reader::Load(save_stream, Player::encoding);
+			if (!save) {
+				Output::Debug("EasyRpgInspectLcfData: Save corrupted {}", save_id);;
+				return true;
+			}
+			switch (output_mode) {
+				case 0:
+				{
+					auto result = lcf::LSD_Reader::InspectBoolean(*save, path);
+					cnt_read = set_switches(start, extract_count, result);
+					break;
+				}
+				case 1:
+				{
+					auto result = lcf::LSD_Reader::InspectInteger(*save, path);
+					cnt_read = set_variables(start, extract_count, result);
+					break;
+				}
+				case 2:
+				{
+					auto result = lcf::LSD_Reader::InspectString(*save, path);
+					cnt_read = set_strings(start, extract_count, result);
+					break;
+				}
+				default:
+					break;
+			}
+			break;
+		}
+	}
+
+	if (cnt_var_id > 0) {
+		Main_Data::game_variables->Set(cnt_var_id, cnt_read);
+		Game_Map::SetNeedRefreshForVarChange(cnt_var_id);
+	}
+
+	return true;
 }
