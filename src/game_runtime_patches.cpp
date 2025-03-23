@@ -130,6 +130,7 @@ void RuntimePatches::LockPatchesAsDiabled() {
 	LockPatchArguments<12>(MonSca::patch_args);
 	LockPatchArguments<2>(EXPlus::patch_args);
 	LockPatchArguments<2>(GuardRevamp::patch_args);
+	Player::game_config.patch_ext_key_input.Lock(0);
 }
 
 bool RuntimePatches::ParseFromCommandLine(CmdlineParser& cp) {
@@ -146,6 +147,18 @@ bool RuntimePatches::ParseFromCommandLine(CmdlineParser& cp) {
 	if (cp.ParseNext(arg, 1, { "--patch-guardrevamp", "--no-patch-guardrevamp" })) {
 		return ParsePatchArguments<2>(cp, arg, GuardRevamp::patch_args);
 	}
+	if (cp.ParseNext(arg, 1, { "--patch-ext-key-input", "--no-ext-key-input" })) {
+		long li_value = 0;
+		if (arg.ArgIsOn() && arg.ParseValue(0, li_value)) {
+			Player::game_config.patch_ext_key_input.Set(li_value);
+			return true;
+		}
+
+		if (arg.ArgIsOff()) {
+			Player::game_config.patch_ext_key_input.Set(0);
+			return true;
+		}
+	}
 	return false;
 }
 
@@ -155,14 +168,21 @@ bool RuntimePatches::ParseFromIni(lcf::INIReader& ini) {
 	patch_override |= ParsePatchFromIni<12>(ini, MonSca::patch_args);
 	patch_override |= ParsePatchFromIni<2>(ini, EXPlus::patch_args);
 	patch_override |= ParsePatchFromIni<2>(ini, GuardRevamp::patch_args);
+	patch_override |= Player::game_config.patch_ext_key_input.FromIni(ini);
 	return patch_override;
 }
 
 void RuntimePatches::DetermineActivePatches(std::vector<std::string>& patches) {
+	auto add_int = [&](auto& patch) {
+		if (patch.Get() > 0) {
+			patches.push_back(fmt::format("{} ({})", patch.GetName(), patch.Get()));
+		}
+	};
 	PrintPatch<2>(patches, EncounterRandomnessAlert::patch_args);
 	PrintPatch<12>(patches, MonSca::patch_args);
 	PrintPatch<2>(patches, EXPlus::patch_args);
 	PrintPatch<2>(patches, GuardRevamp::patch_args);
+	add_int(Player::game_config.patch_ext_key_input);
 }
 
 bool RuntimePatches::EncounterRandomnessAlert::HandleEncounter(int troop_id) {
@@ -301,6 +321,28 @@ bool RuntimePatches::GuardRevamp::OverrideDamageAdjustment(int& dmg, const Game_
 			dmg *= rate_strong;
 		}
 		dmg /= 100;
+		return true;
+	}
+	return false;
+}
+
+bool RuntimePatches::VirtualKeys::HandleExtendedKeyInput() {
+	if (auto var_id = Player::game_config.patch_ext_key_input.Get(); var_id > 0) {
+		int key_id = Main_Data::game_variables->Get(var_id);
+		if (key_id <= 0) {
+			return false;
+		}
+		auto input_key = VirtualKeyToInputKey(key_id);
+		if (input_key == Input::Keys::NONE) {
+			Output::Debug("ExtendedKeyInput: Unsupported keycode {}", key_id);
+			return false;
+		}
+		// Original ExtendedKeyInput uses WinAPI's "GetAsyncKeyState"
+		if (Input::IsRawKeyPressed(input_key)) {
+			Main_Data::game_variables->Set(var_id, -1);
+		} else {
+			Main_Data::game_variables->Set(var_id, 0);
+		}
 		return true;
 	}
 	return false;

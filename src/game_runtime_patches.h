@@ -194,6 +194,18 @@ namespace RuntimePatches {
 		constexpr Input::Keys::InputKey VirtualKeyToInputKey(uint32_t key_id);
 
 		constexpr uint32_t InputKeyToVirtualKey(Input::Keys::InputKey input_key);
+
+		/**
+		 * Support for RPG_RT patch 'ExtendedKeyInput'.
+		 *
+		 * Checks the key state for a keycode that is read from the
+		 * configured patch variable (default: V[3340]) and writes the
+		 * result back to the same location.
+		 * If the key is pressed, '-1' will be written, otherwise the
+		 * variable is set to zero.
+		 * @return if the key state was processed.
+		 */
+		bool HandleExtendedKeyInput();
 	}
 }
 

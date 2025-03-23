@@ -3213,6 +3213,10 @@ bool Game_Interpreter::CommandKeyInputProc(lcf::rpg::EventCommand const& com) { 
 		return false;
 	}
 
+	if (RuntimePatches::VirtualKeys::HandleExtendedKeyInput()) {
+		return true;
+	}
+
 	_keyinput = {};
 	_keyinput.wait = wait;
 	_keyinput.variable = var_id;
