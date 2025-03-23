@@ -72,6 +72,8 @@ struct Game_ConfigGame {
 	ConfigParam<int> patch_guardrevamp_strong{ "GuardRevamp", "Changes damage calculation for defense situations (Strong)", "Patch", "GuardRevamp.StrongDefense", 0 };
 
 	ConfigParam<int> patch_ext_key_input{ "ExtendedKeyInput", "Extends the KeyInput command to process any virtual key.", "Patch", "ExtendedKeyInput", 0 };
+	ConfigParam<int> patch_keyboard_observator{ "KeyboardObservator", "Processes all virtual key states at the beginning of each frame and writes them to variables.", "Patch", "KeyboardObservator", 0 };
+
 	// Command line only
 	BoolConfigParam patch_support{ "Support patches", "When OFF all patch support is disabled", "", "", true };
 

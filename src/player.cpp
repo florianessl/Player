@@ -369,6 +369,7 @@ void Player::Update(bool update_scene) {
 	}
 
 	if (update_scene) {
+		RuntimePatches::OnBeginFrame();
 		if (Main_Data::game_ineluki) {
 			Main_Data::game_ineluki->Update();
 		}

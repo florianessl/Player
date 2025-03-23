@@ -28,6 +28,8 @@
 #include "main_data.h"
 #include "player.h"
 #include "output.h"
+#include "input.h"
+#include <baseui.h>
 
 namespace {
 	template<int C>
@@ -131,6 +133,7 @@ void RuntimePatches::LockPatchesAsDiabled() {
 	LockPatchArguments<2>(EXPlus::patch_args);
 	LockPatchArguments<2>(GuardRevamp::patch_args);
 	Player::game_config.patch_ext_key_input.Lock(0);
+	Player::game_config.patch_keyboard_observator.Lock(0);
 }
 
 bool RuntimePatches::ParseFromCommandLine(CmdlineParser& cp) {
@@ -147,7 +150,7 @@ bool RuntimePatches::ParseFromCommandLine(CmdlineParser& cp) {
 	if (cp.ParseNext(arg, 1, { "--patch-guardrevamp", "--no-patch-guardrevamp" })) {
 		return ParsePatchArguments<2>(cp, arg, GuardRevamp::patch_args);
 	}
-	if (cp.ParseNext(arg, 1, { "--patch-ext-key-input", "--no-ext-key-input" })) {
+	if (cp.ParseNext(arg, 1, { "--patch-ext-key-input", "--no-patch-ext-key-input" })) {
 		long li_value = 0;
 		if (arg.ArgIsOn() && arg.ParseValue(0, li_value)) {
 			Player::game_config.patch_ext_key_input.Set(li_value);
@@ -156,6 +159,18 @@ bool RuntimePatches::ParseFromCommandLine(CmdlineParser& cp) {
 
 		if (arg.ArgIsOff()) {
 			Player::game_config.patch_ext_key_input.Set(0);
+			return true;
+		}
+	}
+	if (cp.ParseNext(arg, 1, { "--patch-keyboard-observator", "--no-patch-keyboard-observator" })) {
+		long li_value = 0;
+		if (arg.ArgIsOn() && arg.ParseValue(0, li_value)) {
+			Player::game_config.patch_keyboard_observator.Set(li_value);
+			return true;
+		}
+
+		if (arg.ArgIsOff()) {
+			Player::game_config.patch_keyboard_observator.Set(0);
 			return true;
 		}
 	}
@@ -169,6 +184,7 @@ bool RuntimePatches::ParseFromIni(lcf::INIReader& ini) {
 	patch_override |= ParsePatchFromIni<2>(ini, EXPlus::patch_args);
 	patch_override |= ParsePatchFromIni<2>(ini, GuardRevamp::patch_args);
 	patch_override |= Player::game_config.patch_ext_key_input.FromIni(ini);
+	patch_override |= Player::game_config.patch_keyboard_observator.FromIni(ini);
 	return patch_override;
 }
 
@@ -183,6 +199,13 @@ void RuntimePatches::DetermineActivePatches(std::vector<std::string>& patches) {
 	PrintPatch<2>(patches, EXPlus::patch_args);
 	PrintPatch<2>(patches, GuardRevamp::patch_args);
 	add_int(Player::game_config.patch_ext_key_input);
+	add_int(Player::game_config.patch_keyboard_observator);
+}
+
+void RuntimePatches::OnBeginFrame() {
+	if (EP_UNLIKELY(Player::game_config.patch_keyboard_observator.Get() > 0)) {
+		VirtualKeys::HandleKeyboardObservator(Player::game_config.patch_keyboard_observator.Get());
+	}
 }
 
 bool RuntimePatches::EncounterRandomnessAlert::HandleEncounter(int troop_id) {
@@ -346,4 +369,47 @@ bool RuntimePatches::VirtualKeys::HandleExtendedKeyInput() {
 		return true;
 	}
 	return false;
+}
+
+void RuntimePatches::VirtualKeys::HandleKeyboardObservator(int var_id) {
+	if (Main_Data::game_variables->GetSize() < var_id + 255) {
+		// Patch is not active until the variable array has been initialized to encompass the needed var range
+		return;
+	}
+	bool numlock_active = false,
+		capslock_active = false,
+		scrolllock_active = false;
+
+	if (DisplayUi) {
+		DisplayUi->GetToggleKeyStates(numlock_active, capslock_active, scrolllock_active);
+	}
+
+	auto get_kb_value = [](Input::Keys::InputKey input_key, bool mod) {
+		if (Input::IsRawKeyPressed(input_key)) {
+			return mod ? 129 : 128;
+		};
+		return mod ? 1 : 0;
+	};
+
+	for (int vk = 1; vk <= 255; ++vk) {
+		auto input_key = VirtualKeyToInputKey(vk);
+		auto vk_var_id = var_id + vk - 1;
+
+		switch (input_key) {
+			case Input::Keys::NONE:
+				continue;
+			case Input::Keys::NUM_LOCK:
+				Main_Data::game_variables->Set(vk_var_id, get_kb_value(input_key, numlock_active));
+				break;
+			case Input::Keys::CAPS_LOCK:
+				Main_Data::game_variables->Set(vk_var_id, get_kb_value(input_key, capslock_active));
+				break;
+			case Input::Keys::SCROLL_LOCK:
+				Main_Data::game_variables->Set(vk_var_id, get_kb_value(input_key, scrolllock_active));
+				break;
+			default:
+				Main_Data::game_variables->Set(vk_var_id, get_kb_value(input_key, false));
+				break;
+		}
+	}
 }

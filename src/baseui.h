@@ -181,6 +181,7 @@ public:
 	bool ChangeDisplaySurfaceResolution(int new_width, int new_height);
 
 	typedef std::bitset<Input::Keys::KEYS_COUNT> KeyStatus;
+	typedef std::bitset<3> ToggleKeyStatus;
 
 	/**
 	 * Gets vector with the all keys pressed states.
@@ -188,6 +189,8 @@ public:
 	 * @returns vector with the all keys pressed states.
 	 */
 	KeyStatus& GetKeyStates();
+
+	void GetToggleKeyStates(bool& numlock_active, bool& capslock_active, bool& scrollock_active);
 
 	/** @return true if the display manages the framerate */
 	bool IsFrameRateSynchronized() const;
@@ -289,6 +292,8 @@ protected:
 	DisplayMode current_display_mode;
 
 	KeyStatus keys;
+
+	ToggleKeyStatus toggle_keys;
 
 	/** Surface used for zoom. */
 	BitmapRef main_surface;
@@ -427,6 +432,12 @@ inline void BaseUi::SetFrameLimit(int fps_limit) {
 	vcfg.fps_limit.Set(fps_limit);
 
 	frame_limit = (fps_limit == 0 ? Game_Clock::duration(0) : Game_Clock::TimeStepFromFps(fps_limit));
+}
+
+inline void BaseUi::GetToggleKeyStates(bool& numlock_active, bool& capslock_active, bool& scrollock_active) {
+	numlock_active = toggle_keys[0];
+	capslock_active = toggle_keys[1];
+	scrollock_active = toggle_keys[2];
 }
 
 #endif

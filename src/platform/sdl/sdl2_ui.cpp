@@ -864,6 +864,9 @@ void Sdl2Ui::ProcessKeyDownEvent(SDL_Event &evnt) {
 void Sdl2Ui::ProcessKeyUpEvent(SDL_Event &evnt) {
 #if defined(USE_KEYBOARD) && defined(SUPPORT_KEYBOARD)
 	keys[SdlKey2InputKey(evnt.key.keysym.scancode)] = false;
+	toggle_keys[0] = evnt.key.keysym.mod & KMOD_NUM;
+	toggle_keys[1] = evnt.key.keysym.mod & KMOD_CAPS;
+	toggle_keys[2] = evnt.key.keysym.mod & KMOD_SCROLL;
 #else
 	/* unused */
 	(void) evnt;

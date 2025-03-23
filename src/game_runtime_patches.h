@@ -46,6 +46,8 @@ namespace RuntimePatches {
 
 	void DetermineActivePatches(std::vector<std::string>& patches);
 
+	void OnBeginFrame();
+
 	/**
 	 * Support for RPG_RT patch 'Encounter Randomness Alert'.
 	 * This patch skips the normal battle startup logic whenever a random
@@ -206,6 +208,22 @@ namespace RuntimePatches {
 		 * @return if the key state was processed.
 		 */
 		bool HandleExtendedKeyInput();
+
+		/**
+		 * Support for RPG_RT patch 'Keyboard Observator'.
+		 *
+		 * This patch reads the state of the whole keymap at the beginning
+		 * of each frame and writes these values into a range of 256
+		 * in-game variables. (Default: V[4001] - V[4256])
+		 * If the bounds of the variable array have not been initialized
+		 * to encompass this variable range, processing will be skipped.
+		 *
+		 * The resulting values match those given by WinAPI's
+		 * "GetKeyboardState" function:
+		 *   if a key is down:             High-order bit = '1'
+		 *   if a modifier key is toggled: Low-order bit  = '1'
+		 */
+		void HandleKeyboardObservator(int var_id);
 	}
 }
 
