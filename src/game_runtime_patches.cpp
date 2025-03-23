@@ -355,6 +355,10 @@ bool RuntimePatches::VirtualKeys::HandleExtendedKeyInput() {
 		if (key_id <= 0) {
 			return false;
 		}
+#if !defined(SUPPORT_KEYBOARD)
+		Output::Warning("ExtendedKeyInput: Keyboard input is not supported on this platform");
+		return true;
+#endif
 		auto input_key = VirtualKeyToInputKey(key_id);
 		if (input_key == Input::Keys::NONE) {
 			Output::Debug("ExtendedKeyInput: Unsupported keycode {}", key_id);
@@ -376,6 +380,10 @@ void RuntimePatches::VirtualKeys::HandleKeyboardObservator(int var_id) {
 		// Patch is not active until the variable array has been initialized to encompass the needed var range
 		return;
 	}
+#if !defined(SUPPORT_KEYBOARD)
+	Output::Warning("KeyboardObservator: Keyboard input is not supported on this platform");
+	return;
+#endif
 	bool numlock_active = false,
 		capslock_active = false,
 		scrolllock_active = false;
