@@ -5735,7 +5735,6 @@ namespace DispatchTable_VarOp {
 	const dispatch_table_varoperand& BuildDispatchTable(const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx) {
 
 		static_assert(op_type >= eControlVarOp_Default && op_type < eControlVarOp_LAST);
-		assert(tables[static_cast<int>(op_type)] == nullptr);
 
 		std::bitset<16> patch_flags;
 		patch_flags.set(1, includeManiacs_200128);
@@ -5783,10 +5782,16 @@ namespace DispatchTable_VarOp {
 			ops[eVarOperand_Maniacs_Expression] = &Expression<get_param_offset(op_type)>;
 		}
 
-		dispatch_table_varoperand* dispatch_table = new dispatch_table_varoperand(get_param_operand(op_type), (int)patch_flags.to_ulong(), ops, &varOperand_DefaultCase<op_type>);
-		tables[static_cast<int>(op_type)] = dispatch_table;
+		auto addr_dispatch_table = tables[static_cast<int>(op_type)];
 
-		return *dispatch_table;
+		if (addr_dispatch_table != nullptr) {
+			new (addr_dispatch_table) dispatch_table_varoperand(get_param_operand(op_type), (int)patch_flags.to_ulong(), ops, &varOperand_DefaultCase<op_type>);
+		} else {
+			addr_dispatch_table = new dispatch_table_varoperand(get_param_operand(op_type), (int)patch_flags.to_ulong(), ops, &varOperand_DefaultCase<op_type>);
+			tables[static_cast<int>(op_type)] = addr_dispatch_table;
+		}
+
+		return *addr_dispatch_table;
 	}
 
 	void RebuildDispatchTables(const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx) {
@@ -5801,10 +5806,6 @@ namespace DispatchTable_VarOp {
 
 		bool rebuild = tables[eControlVarOp_Default] != nullptr && tables[eControlVarOp_Default]->GetPatchFlags() != patch_flags_new;
 		if (rebuild) {
-			delete tables[eControlVarOp_Default];
-			tables[eControlVarOp_Default] = nullptr;
-		}
-		if (tables[eControlVarOp_Default] == nullptr) {
 			BuildDispatchTable<eControlVarOp_Default>(includeManiacs_200128, includeManiacs24xxxx, includeEasyRpgEx);
 		}
 	}
@@ -5848,7 +5849,6 @@ namespace DispatchTable_CondBranch {
 	template <CommandType op_type>
 	dispatch_table_condition& BuildDispatchTable(const bool include2k3Commands, const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx) {
 		static_assert(op_type >= eCondBranch_Default && op_type < eCondBranch_LAST);
-		assert(tables[static_cast<int>(op_type)] == nullptr);
 
 		std::bitset<16> patch_flags;
 		patch_flags.set(1, include2k3Commands);
@@ -5885,10 +5885,16 @@ namespace DispatchTable_CondBranch {
 			ops[eCondition_Maniacs_Expression] = &ManiacsExpression;
 		}
 
-		dispatch_table_condition* dispatch_table = new dispatch_table_condition((int)patch_flags.to_ulong(), ops, &condition_DefaultCase<op_type>);
-		tables[static_cast<int>(op_type)] = dispatch_table;
+		auto addr_dispatch_table = tables[static_cast<int>(op_type)];
 
-		return *dispatch_table;
+		if (addr_dispatch_table != nullptr) {
+			new (addr_dispatch_table) dispatch_table_condition((int)patch_flags.to_ulong(), ops, &condition_DefaultCase<op_type>);
+		} else {
+			addr_dispatch_table = new dispatch_table_condition((int)patch_flags.to_ulong(), ops, &condition_DefaultCase<op_type>);
+			tables[static_cast<int>(op_type)] = addr_dispatch_table;
+		}
+
+		return *addr_dispatch_table;
 	}
 	
 	void RebuildDispatchTables(const bool include2k3Commands, const bool includeManiacs_200128, const bool includeManiacs24xxxx, const bool includeEasyRpgEx) {
@@ -5902,10 +5908,6 @@ namespace DispatchTable_CondBranch {
 
 		bool rebuild = tables[eCondBranch_Default] != nullptr && tables[eCondBranch_Default]->GetPatchFlags() != patch_flags_new;
 		if (rebuild) {
-			delete tables[eCondBranch_Default];
-			tables[eCondBranch_Default] = nullptr;
-		}
-		if (tables[eCondBranch_Default] == nullptr) {
 			BuildDispatchTable<eCondBranch_Default>(include2k3Commands, includeManiacs_200128, includeManiacs24xxxx, includeEasyRpgEx);
 		}
 	}
