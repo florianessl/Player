@@ -1171,7 +1171,7 @@ namespace EvalControlVarOp {
 			}
 		}
 
-		return ControlVariables::Event<Maniac>(com.parameters[param_offset + 1], enemy_id, interpreter);
+		return ControlVariables::Enemy<Maniac>(com.parameters[param_offset + 1], enemy_id);
 	}
 
 	template <int param_offset>
